@@ -1,0 +1,46 @@
+PANDUAN: GITHUB lalu CLOUDFLARE PAGES (ruang-misi-kpk)
+
+A. UNGGAH KE GITHUB (aman dari file rahasia)
+1. Buat repositori KOSONG di github.com (tanpa README).
+2. Klik dua kali SIAP-GITHUB.cmd. Skrip ini membuat repo git, menambahkan berkas, lalu memeriksa
+   bahwa tidak ada file rahasia. Jika tertulis AMAN, jalankan tiga perintah yang ditampilkan
+   (git commit, git remote add, git push).
+3. JANGAN unggah lewat drag-and-drop di web GitHub, dan JANGAN unggah file ZIP. Cara itu melewati .gitignore.
+   File .dev.vars tidak ada di paket ini; ia dibuat otomatis di komputer Anda saat menjalankan lokal.
+
+B. PASANG DATABASE PRODUKSI (sekali saja)
+   npx wrangler login
+   npm run db:migrate:remote
+Database D1 "ruang-misi-kpk" (ID ada di wrangler.toml) harus ada di akun Cloudflare Anda.
+Jika belum ada: npx wrangler d1 create ruang-misi-kpk, lalu salin database_id yang muncul
+ke wrangler.toml (satu-satunya nilai yang mungkin perlu Anda ganti), dan jalankan migrasi di atas.
+
+C. BUAT PROYEK DI CLOUDFLARE PAGES
+Workers & Pages > Create > Pages > Connect to Git > pilih repo.
+  Framework preset : None
+  Build command    : npm run build
+  Build output dir : dist
+Lalu Settings > Variables and Secrets > Production > Add > pilih tipe SECRET:
+  Nama  : TEACHER_SESSION_SECRET
+  Nilai : teks acak panjang (buat dengan:
+          node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))")
+Hanya ini yang perlu diisi manual. Alasannya:
+  - GOOGLE_CLIENT_ID sudah ada di wrangler.toml (nilai publik) dan ikut terbawa saat deploy.
+  - Binding database DB sudah ada di wrangler.toml. Karena wrangler.toml dipakai sebagai sumber
+    konfigurasi, binding dan variabel biasa di dashboard Cloudflare akan terkunci. Itu normal.
+  - Versi Node (22) diatur oleh file .node-version.
+Setelah menyimpan secret, jalankan Retry deployment / push ulang agar secret terbaca.
+
+D. IZINKAN ALAMAT SITUS DI GOOGLE
+Google Cloud Console > APIs & Services > Credentials > OAuth 2.0 Client ID (yang berakhiran ...k70tp0ujbn) >
+Authorized JavaScript origins > tambahkan, misalnya: https://ruang-misi-kpk.pages.dev
+(tanpa garis miring di akhir). Tambahkan juga domain sendiri jika ada.
+OAuth consent screen: jika masih "Testing", tambahkan email guru sebagai Test user atau ubah ke "In production".
+
+E. CEK
+Buka https://ALAMAT-SITUS/api/teacher-google-config
+  "ready":true -> semua lengkap, coba Portal Guru > Daftar Akun.
+  "ready":false -> isi "problems" menyebut bagian yang masih kurang.
+
+F. SEBELUM PUSH BERIKUTNYA, SELALU
+   npm run check:repo

@@ -1,0 +1,47 @@
+{
+  "name": "ruang-misi-kpk",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port=3000 --host=0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview",
+    "clean": "rm -rf dist server.js",
+    "lint": "tsc --noEmit && tsc --noEmit -p tsconfig.server.json",
+    "test": "tsx --test tests/sync.test.ts tests/logic.test.ts tests/teacher-google.test.ts",
+    "db:migrate:local": "npm run setup:local && wrangler d1 migrations apply ruang-misi-kpk --local",
+    "db:migrate:remote": "wrangler d1 migrations apply ruang-misi-kpk --remote",
+    "pages:dev": "npm run setup:local && npm run build && wrangler pages dev dist --port 8788",
+    "deploy": "npm run build && wrangler pages deploy dist --project-name=ruang-misi-kpk",
+    "hash:password": "node scripts/hash-password.mjs",
+    "check:security": "node scripts/check-security-config.mjs",
+    "setup:local": "node scripts/setup-local.mjs",
+    "check:repo": "node scripts/check-repo.mjs"
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@vitejs/plugin-react": "^6.1.1",
+    "dotenv": "^17.2.3",
+    "express": "^4.21.2",
+    "lucide-react": "^0.546.0",
+    "motion": "^12.23.24",
+    "react": "^19.0.1",
+    "react-dom": "^19.0.1",
+    "vite": "^8.3.0",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261006.1",
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.14.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "autoprefixer": "^10.4.21",
+    "esbuild": "^0.28.2",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.21.0",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.0.0"
+  }
+}

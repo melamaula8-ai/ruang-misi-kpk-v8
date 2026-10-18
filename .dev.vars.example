@@ -1,0 +1,3 @@
+# Konfigurasi lokal. File .dev.vars dibuat otomatis oleh "npm run setup:local" (jangan di-commit).
+GOOGLE_CLIENT_ID="599123321863-thb7ev29cl6o23pqu8k1c1k70tp0ujbn.apps.googleusercontent.com"
+TEACHER_SESSION_SECRET="DIISI-OTOMATIS"

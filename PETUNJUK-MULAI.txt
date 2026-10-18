@@ -1,0 +1,32 @@
+RUANG MISI KPK - PAKET UTUH UI V8 + MUSIK (login Google diperbaiki)
+
+CARA TERCEPAT (WINDOWS)
+1. Ekstrak ZIP ke folder baru.
+2. Klik dua kali CEK-DAN-JALANKAN.cmd
+   (memasang dependensi, menyiapkan database lokal, tes, lint, build, lalu menjalankan server).
+3. Buka http://localhost:8788  <- pakai "localhost", bukan 127.0.0.1.
+4. Portal Guru > Daftar Akun > pilih akun Google > isi username dan kata sandi.
+
+CARA MANUAL
+  npm ci
+  npm run db:migrate:local
+  npm test
+  npm run lint
+  npm run build
+  npm run pages:dev
+
+SATU HAL YANG TIDAK BISA DIPERBAIKI DARI KODE (Google Cloud Console)
+APIs & Services > Credentials > OAuth 2.0 Client ID (yang ID-nya ada di .dev.vars),
+tambahkan di "Authorized JavaScript origins":
+  http://localhost:8788
+  http://localhost
+Untuk produksi, tambahkan juga alamat https situs Cloudflare Pages Anda.
+Jika popup Google menampilkan "origin_mismatch" atau "invalid_client", penyebabnya di sini
+(origin belum didaftarkan atau Client ID sudah dihapus/diganti).
+
+CATATAN
+- "npm run dev" (port 3000) hanya UI; /api diteruskan ke port 8788, jadi pages:dev harus ikut berjalan.
+- Jika tombol Google muncul dengan pesan merah, isinya menjelaskan konfigurasi yang kurang
+  (Client ID, secret sesi, atau migrasi database belum dijalankan).
+- .dev.vars dibuat otomatis (secret acak) saat menjalankan lokal; ia tidak ikut GitHub (.gitignore).
+- GitHub dan Cloudflare: ikuti PANDUAN-GITHUB-CLOUDFLARE.txt (pakai SIAP-GITHUB.cmd untuk unggahan aman).

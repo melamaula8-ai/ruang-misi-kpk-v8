@@ -1,0 +1,14 @@
+name = "ruang-misi-kpk"
+compatibility_date = "2025-01-01"
+pages_build_output_dir = "dist"
+
+# Client ID Google bersifat publik (muncul di halaman login), jadi aman disimpan di sini.
+# JANGAN menaruh rahasia di file ini: TEACHER_SESSION_SECRET diisi sebagai Secret di dashboard Cloudflare.
+[vars]
+GOOGLE_CLIENT_ID = "599123321863-thb7ev29cl6o23pqu8k1c1k70tp0ujbn.apps.googleusercontent.com"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ruang-misi-kpk"
+database_id = "865f0da1-273a-4285-ac43-d2b4de2a42a6"
+migrations_dir = "migrations"

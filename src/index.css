@@ -1,0 +1,110 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --brand-green: #C5E68A;
+    --brand-yellow: #FFE082;
+    --brand-orange: #FF913D;
+    --brand-brown: #95634F;
+    --brand-brown-dark: #3E2723;
+    --brand-bg: #FAF8F5;
+  }
+
+  body {
+    font-family: 'Nunito Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: var(--brand-bg);
+    color: #2D231E;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Plus Jakarta Sans', 'Nunito Sans', sans-serif;
+  }
+}
+
+@media print {
+  body {
+    background-color: #ffffff !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+}
+
+
+/* Ruang Misi KPK — gerak halus dan pola visual yang konsisten */
+@keyframes float-soft { 0%,100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-9px) rotate(2deg); } }
+@keyframes float-delayed { 0%,100% { transform: translateY(0) rotate(2deg); } 50% { transform: translateY(8px) rotate(-2deg); } }
+@keyframes hero-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+@keyframes learning-enter { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes landing-orbit { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(18px,-15px) scale(1.05); } }
+.animate-float-soft { animation: float-soft 4.5s ease-in-out infinite; }
+.animate-float-delayed { animation: float-delayed 5s ease-in-out infinite; }
+.animate-hero-bob { animation: hero-bob 5.5s ease-in-out infinite; }
+.learning-page-enter { animation: learning-enter .45s ease-out both; }
+.learning-card { transition: transform .22s ease, box-shadow .22s ease; }
+.learning-card:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgb(149 99 79 / 8%); }
+.role-landing { background: radial-gradient(ellipse at 8% 12%, #fff0c6 0, transparent 30%), radial-gradient(ellipse at 90% 82%, #dcefc0 0, transparent 30%), linear-gradient(135deg,#fbf7ef,#f8f1e6 55%,#f2f7e8); }
+.landing-shell { animation: learning-enter .55s ease-out both; }
+.landing-orb { position:absolute; z-index:-1; border-radius:9999px; filter:blur(1px); animation:landing-orbit 11s ease-in-out infinite; }
+.landing-orb-one { width:210px;height:210px;left:-65px;top:16%;background:#C5E68A66; }
+.landing-orb-two { width:260px;height:260px;right:-80px;bottom:5%;background:#FFE08266;animation-delay:-4s; }
+@media (prefers-reduced-motion: reduce) { *,*::before,*::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; scroll-behavior:auto !important; transition-duration:.01ms !important; } }
+
+
+/* V2: visual polish untuk petualangan anak SD — cerah, ramah, tidak berisik. */
+@keyframes confetti-drift { 0%,100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-5px) rotate(5deg); } }
+@keyframes happy-pop { 0%,100% { transform: scale(1); } 50% { transform: scale(1.035); } }
+.adventure-page { position: relative; isolation: isolate; }
+.adventure-page::before { content: ""; position: absolute; z-index: -1; width: 13rem; height: 13rem; top: 3rem; left: -5rem; border-radius: 9999px; background: radial-gradient(circle, #C5E68A55, #C5E68A00 70%); pointer-events: none; }
+.adventure-page::after { content: ""; position: absolute; z-index: -1; width: 15rem; height: 15rem; right: -5rem; bottom: 3rem; border-radius: 9999px; background: radial-gradient(circle, #FFE08255, #FFE08200 70%); pointer-events: none; }
+.practice-hero, .identity-hero, .mission-hub-hero, .track-selection-hero, .class-access-card { box-shadow: 0 18px 40px rgb(149 99 79 / 10%); }
+.practice-question-card { position: relative; overflow: hidden; }
+.practice-question-card::before { content: ""; position: absolute; inset: 0 auto auto 0; height: 7px; width: 100%; background: linear-gradient(90deg,#C5E68A 0 25%,#FFE082 25% 50%,#FF913D 50% 75%,#95634F 75%); }
+.practice-story { position: relative; }
+.practice-answer-box { box-shadow: 0 4px 0 rgb(149 99 79 / 5%); }
+.member-role-card:focus-within { border-color: #FF913D; box-shadow: 0 0 0 4px rgb(255 145 61 / 12%); }
+.adventure-page button:not(:disabled) { transition: transform .18s ease, box-shadow .18s ease, filter .18s ease; }
+.adventure-page button:not(:disabled):hover { filter: saturate(1.06); }
+.adventure-page input, .adventure-page textarea, .adventure-page select { transition: border-color .18s ease, box-shadow .18s ease, background-color .18s ease; }
+.role-choice-student:hover { background: linear-gradient(105deg,#EDF8D9,#FFFFFF); }
+.role-choice-teacher:hover { background: linear-gradient(105deg,#FFF0E5,#FFFFFF); }
+@media (prefers-reduced-motion: no-preference) { .practice-hero .animate-float-soft, .identity-hero .animate-float-soft { animation: confetti-drift 3.2s ease-in-out infinite; } }
+
+
+/* V4: aksesibilitas font dan interaksi matematika yang ramah anak SD. */
+:root { --reading-font-size: 16px; }
+body { font-size: var(--reading-font-size); }
+/* Perbesar teks kecil yang sebelumnya sulit dibaca pada perangkat kelas. */
+.text-xs { font-size: 0.875rem; line-height: 1.35rem; }
+.text-sm { font-size: 1rem; line-height: 1.55rem; }
+.role-landing .text-\[11px\] { font-size: 0.875rem; line-height: 1.35rem; }
+.teacher-dashboard-page .text-\[10px\], .teacher-dashboard-page .text-\[11px\] { font-size: 0.8125rem; line-height: 1.2rem; }
+input, select, textarea { font-size: 1rem; }
+button { min-height: 2.65rem; }
+.landing-music-panel { max-width: 100%; }
+.landing-music-panel audio { display: none; }
+.math-float-card { animation: math-card-bob 4.8s ease-in-out infinite; }
+.math-number-strip span { transition: transform .2s ease, background-color .2s ease; }
+.math-number-strip span:hover { transform: translateY(-4px) rotate(4deg); background: #FFE082; }
+@keyframes math-card-bob { 0%,100% { transform: translateY(0) rotate(3deg); } 50% { transform: translateY(-8px) rotate(0deg); } }
+.role-choice { min-height: 6rem; }
+.practice-question-card, .member-role-card, .learning-card { transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease; }
+.practice-question-card:hover, .member-role-card:hover { transform: translateY(-2px); box-shadow: 0 16px 34px rgb(149 99 79 / 12%); }
+@media (max-width: 640px) {
+  .role-landing h1 { font-size: clamp(2.25rem, 9vw, 3rem); }
+  .landing-music-panel { justify-content: flex-start; }
+  .landing-music-panel input[type="range"] { width: 4rem; }
+  .adventure-page { padding-top: 1rem; }
+}
+
+
+/* V6: visual matematika lebih jelas tanpa ornamen bintang/berkilau. */
+.math-number-strip button { box-shadow: 0 2px 0 rgb(74 103 30 / 12%); }
+.math-number-strip button:active { transform: translateY(1px) scale(.97); }
+.math-float-card { box-shadow: 0 12px 24px rgb(149 99 79 / 14%); }
+@keyframes gentle-number-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+.math-number-strip { animation: gentle-number-bob 4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .math-number-strip { animation: none !important; } }

@@ -1,0 +1,42 @@
+Ruang Misi KPK - Full-stack UI V8, revisi autentikasi Google (18 Okt 2026)
+
+PERBAIKAN
+1. Server tidak lagi menyamarkan semua kegagalan Google sebagai "verifikasi gagal": pesan kini membedakan
+   Client ID tidak cocok (aud), token kedaluwarsa/ditolak, email belum terverifikasi, dan Google tak terjangkau (502).
+   Pemeriksaan exp ditambahkan; permintaan ke Google diberi batas waktu 8 detik.
+2. GOOGLE_CLIENT_ID dibersihkan dari spasi/kutip (kesalahan umum saat disalin ke dashboard) sebelum dibandingkan.
+3. Celah keamanan: akun terdaftar bisa memakai username admin env (TEACHER_USERNAME) lalu mewarisi data admin.
+   Username itu kini dicadangkan (ditolak saat daftar dan saat login Google).
+4. Login Google sebelumnya melempar error 500 HTML jika migrasi belum dijalankan; kini 503 dengan perintah perbaikan.
+5. /api/teacher-google-config kini melaporkan masalah konfigurasi (secret sesi, binding DB, migrasi) dan UI menampilkannya.
+6. UI: login username/sandi menampilkan pesan asli server (bukan selalu "Login gagal"); respons non-JSON
+   (mis. menjalankan "npm run dev" tanpa server API) dijelaskan; closure usang pada callback Google diperbaiki.
+7. Sesi guru yang kedaluwarsa (8 jam) kini otomatis keluar, tidak lagi terjebak status "login" dengan data offline.
+8. CEK-DAN-JALANKAN.cmd kini menjalankan migrasi D1 lokal (sebelumnya terlewat, penyebab umum "akun belum dapat disimpan").
+9. pages:dev dikunci ke port 8788; origin Google yang dianjurkan: http://localhost:8788 dan http://localhost.
+10. vite dev meneruskan /api ke 8788.
+11. Tes baru tests/teacher-google.test.ts (11 skenario): daftar, login Google, duplikat, username dicadangkan,
+    aud salah, token kedaluwarsa, jaringan mati, migrasi belum jalan, isolasi data antar guru.
+
+PERSIAPAN GITHUB DAN CLOUDFLARE (revisi lanjutan)
+12. .dev.vars (berisi secret) DIHAPUS dari paket; dibuat otomatis dan acak oleh npm run setup:local saat jalan lokal.
+13. .gitignore dilengkapi (.env, kunci, log); npm run check:repo dan SIAP-GITHUB.cmd memblokir file/pola rahasia sebelum push.
+14. wrangler.toml kini memuat GOOGLE_CLIENT_ID (publik) di [vars], dan binding D1 sudah ada; di Cloudflare tinggal
+    mengisi satu Secret: TEACHER_SESSION_SECRET. Koreksi: saran awal menambah binding/variabel manual di dashboard
+    tidak diperlukan dan akan terkunci karena wrangler.toml menjadi sumber konfigurasi.
+15. .node-version (22) agar build Cloudflare memakai Node yang didukung Vite 8.
+16. PANDUAN-GITHUB-CLOUDFLARE.txt berisi langkah lengkap A-F.
+
+PEMERIKSAAN DATA/BERKAS
+- Semua impor relatif di src/ ada; aset /music, /sounds, /app_logo.jpg ada; package-lock.json sinkron dengan package.json;
+  migrasi 0001-0003 lengkap dan dimuat oleh tes.
+
+HASIL VERIFIKASI DI LINGKUNGAN PEMBUAT
+- Tes: 28/28 lulus (tsx --test tests/sync.test.ts tests/logic.test.ts tests/teacher-google.test.ts), SQLite sungguhan.
+- node scripts/check-security-config.mjs: lulus.
+- Pemeriksaan tipe parsial: tidak ada error pada berkas yang diubah selain artefak tanpa node_modules.
+
+BELUM DIVERIFIKASI (butuh komputer Anda)
+- npm ci, npm run lint, npm run build penuh (jaringan/dependensi tidak tersedia di lingkungan pembuat).
+- Popup Google sungguhan: bergantung pada Authorized JavaScript origins di Google Cloud Console (lihat PETUNJUK-MULAI.txt).
+- Wrangler/D1 lokal dan produksi, deploy.
