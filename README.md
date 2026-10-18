@@ -1,32 +1,92 @@
-# Ruang Misi KPK — UI V8 + Musik (konfigurasi lokal disiapkan)
+# Ruang Misi KPK
 
-Paket sumber lengkap dengan UI dan musik dipertahankan. Konfigurasi lokal sudah diisi menggunakan Google OAuth Client ID yang sebelumnya Anda berikan dan ID database D1 yang tercatat di `wrangler.toml`.
+### Media Pembelajaran Digital Matematika Kelas V SD/MI
 
-## Menjalankan di Windows
+**Ruang Misi KPK** merupakan media pembelajaran digital interaktif yang dirancang untuk membantu peserta didik memahami konsep Kelipatan Persekutuan Terkecil (KPK) melalui kegiatan pemecahan masalah yang kontekstual, kolaboratif, dan menyenangkan.
 
-1. Ekstrak ZIP ke folder baru.
-2. Buka CMD di folder `Ruang-Misi-KPK-Utuh-UI-V8`.
-3. Jalankan `npm ci`.
-4. Jalankan `npm run db:migrate:local` untuk menyiapkan database D1 lokal (tidak mengubah database produksi).
-5. Jalankan `npm test`, lalu `npm run lint`, lalu `npm run build`.
-6. Jalankan `npm run pages:dev`, lalu buka `http://localhost:8788`.
-7. Gunakan alur **Daftar Akun** untuk mendaftarkan akun guru dengan Google. Login Google hanya berfungsi jika origin lokal sudah diizinkan pada Google Cloud OAuth Client. Tambahkan `http://localhost:8788` dan `http://localhost` ke **Authorized JavaScript origins** jika belum ada.
+Aplikasi ini menghadirkan pengalaman belajar berbasis misi. Peserta didik bekerja dalam kelompok, mengidentifikasi masalah, menyusun strategi penyelesaian, mengerjakan tantangan, mempresentasikan hasil, serta melakukan refleksi terhadap proses pembelajaran.
 
-## Konfigurasi yang telah disiapkan
+## Identitas Karya
 
-- Google OAuth Client ID: ada di `wrangler.toml` (`[vars]`) dan `.dev.vars.example`; nilainya publik.
-- `TEACHER_SESSION_SECRET`: dibuat acak otomatis di `.dev.vars` oleh `npm run setup:local`; di produksi diisi sebagai Secret di Cloudflare.
-- D1 binding: `DB`; nama database dan database ID tercantum di `wrangler.toml`.
-- CAPTCHA/Turnstile: tidak digunakan.
+- **Nama aplikasi:** Ruang Misi KPK
+- **Bidang:** Pendidikan dan teknologi pembelajaran
+- **Mata pelajaran:** Matematika
+- **Fase/Kelas:** Fase C / Kelas V SD/MI
+- **Materi utama:** Kelipatan Persekutuan Terkecil (KPK)
+- **Pembuat:** Mela Minkhatul Maula
 
-## Jalan pintas Windows
+## Tujuan Pengembangan
 
-Klik dua kali `CEK-DAN-JALANKAN.cmd`: memasang dependensi, menjalankan migrasi database lokal, tes, lint, build, lalu server di `http://localhost:8788`.
+Ruang Misi KPK dikembangkan untuk:
 
-## Batasan penting
+1. Membantu peserta didik memahami konsep KPK melalui permasalahan yang dekat dengan kehidupan sehari-hari.
+2. Meningkatkan kemampuan pemecahan masalah matematis melalui kegiatan memahami masalah, merencanakan penyelesaian, melaksanakan strategi, dan memeriksa kembali jawaban.
+3. Mendorong kolaborasi, komunikasi, tanggung jawab, dan partisipasi aktif peserta didik dalam pembelajaran.
+4. Memfasilitasi pembelajaran sesuai dengan tingkat kesiapan belajar dan kebutuhan peserta didik.
+5. Menghadirkan pengalaman belajar digital yang interaktif, terstruktur, dan berpusat pada peserta didik.
 
-- `.dev.vars` hanya untuk pengembangan lokal dan masuk `.gitignore`; jangan commit atau unggah ke GitHub (`npm run check:repo` memeriksanya).
-- Satu-satunya pengaturan produksi manual: Secret `TEACHER_SESSION_SECRET` di dashboard Cloudflare. Lihat `PANDUAN-GITHUB-CLOUDFLARE.txt`.
-- `npm ci`, tes, lint, build, dan login Google end-to-end perlu dijalankan pada komputer Anda karena membutuhkan dependensi dan jaringan/provider Google.
-- `npm run db:migrate:local` hanya menyiapkan database lokal. Jangan menjalankan migrasi remote atau deploy sebelum sengaja memverifikasi target produksi.
-- Jika Client ID lama sudah diganti/dicabut di Google Cloud, ganti `GOOGLE_CLIENT_ID` di `.dev.vars` dengan Client ID aktif.
+## Materi Pembelajaran
+
+Materi utama yang dikembangkan dalam aplikasi ini adalah **Kelipatan Persekutuan Terkecil (KPK)**, meliputi:
+
+- Konsep kelipatan suatu bilangan.
+- Kelipatan persekutuan dua bilangan.
+- Menentukan KPK melalui strategi perhitungan yang sesuai.
+- Penerapan KPK dalam penyelesaian masalah kontekstual.
+- Penggunaan kalender dan garis bilangan sebagai sarana eksplorasi konsep matematika.
+
+## Pendekatan dan Model Pembelajaran
+
+Ruang Misi KPK dirancang dengan mengintegrasikan beberapa pendekatan dan model pembelajaran berikut.
+
+**1. Problem Based Learning (PBL)**
+
+Pembelajaran dimulai dari permasalahan yang harus diselesaikan peserta didik. Peserta didik mengeksplorasi informasi, berdiskusi, menyusun strategi, dan menyampaikan hasil penyelesaian.
+
+**2. Teaching at the Right Level (TaRL)**
+
+Aktivitas dan tantangan pembelajaran disesuaikan dengan kesiapan belajar peserta didik. Aplikasi menyediakan jalur misi yang berbeda untuk mendukung kebutuhan belajar yang beragam.
+
+**3. Desain Didaktis**
+
+Penyajian materi, masalah, dan aktivitas dirancang secara terstruktur dengan mempertimbangkan kebutuhan belajar peserta didik serta kemungkinan kesulitan dalam memahami konsep KPK.
+
+**4. Pembelajaran Kolaboratif**
+
+Peserta didik bekerja dalam tim dengan pembagian peran dan tanggung jawab untuk menyelesaikan misi bersama.
+
+## Fitur Utama
+
+- **Ruang Tiga Pintu:** pilihan jalur belajar berdasarkan kesiapan peserta didik.
+- **Identitas Tim:** pengisian identitas kelompok dan pembagian peran anggota.
+- **Empat Track Misi:** rangkaian tantangan pemecahan masalah.
+- **Alat Bantu Interaktif:** kalender, garis bilangan, tabel kelipatan, dan media eksplorasi matematika lainnya.
+- **Timer Pembelajaran:** mendukung pengelolaan waktu pengerjaan misi.
+- **Presentasi dan Refleksi:** memberikan kesempatan kepada peserta didik untuk mengomunikasikan hasil dan mengevaluasi proses belajar.
+- **Dashboard Guru:** mendukung pengelolaan kelas, kode akses kelompok, pemantauan jawaban, serta evaluasi hasil pekerjaan peserta didik.
+- **Evaluasi oleh Guru:** hasil pekerjaan diperiksa oleh guru sebelum hasil penilaian disampaikan kepada peserta didik.
+
+## Manfaat Pembelajaran
+
+Melalui Ruang Misi KPK, peserta didik diharapkan tidak hanya mampu menentukan hasil perhitungan KPK, tetapi juga memahami proses penyelesaian masalah, mengembangkan penalaran matematis, bekerja sama, dan bertanggung jawab terhadap tugas kelompok.
+
+Media ini juga membantu guru mengelola pembelajaran yang lebih adaptif, interaktif, dan berorientasi pada kebutuhan peserta didik.
+
+## Teknologi
+
+Aplikasi dikembangkan menggunakan teknologi web, dengan komponen utama berupa:
+
+- React dan TypeScript untuk antarmuka aplikasi.
+- Vite untuk proses pengembangan dan build.
+- Cloudflare Pages untuk rencana penyebaran aplikasi web.
+- Cloudflare D1 untuk penyimpanan data apabila konfigurasi backend telah diselesaikan.
+
+## Pengembang
+
+**Mela Minkhatul Maula**
+
+Pengembang karya inovasi media pembelajaran digital Ruang Misi KPK untuk mendukung pembelajaran Matematika yang bermakna, kolaboratif, dan sesuai dengan kebutuhan belajar peserta didik.
+
+---
+
+*Ruang Misi KPK — Belajar Matematika, Menyelesaikan Misi, dan Bertumbuh Bersama.*
