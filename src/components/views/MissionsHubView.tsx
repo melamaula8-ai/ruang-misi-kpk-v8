@@ -21,7 +21,7 @@ import { soundManager } from '../../utils/sound';
 
 interface Props {
   onNavigate: (view: string) => void;
-  onSelectMission: (missionNum: 1 | 2 | 3 | 4) => void;
+  onSelectMission: (missionNum: number) => void;
 }
 
 export const MissionsHubView: React.FC<Props> = ({ onNavigate, onSelectMission }) => {
@@ -37,83 +37,45 @@ export const MissionsHubView: React.FC<Props> = ({ onNavigate, onSelectMission }
   const [celebrationOpen, setCelebrationOpen] = useState(false);
   const [hasCelebrated, setHasCelebrated] = useState(false);
 
-  const missionsMeta = [
-    {
-      num: 1 as const,
-      id: 'piket',
-      title: 'Kasus 1: Jadwal Piket Kelas',
-      subtitle: 'Menyiram tanaman kelas dan tugas berkala',
-      Illustration: PiketIllustration,
-    },
-    {
-      num: 2 as const,
-      id: 'lampu',
-      title: 'Kasus 2: Lampu Lalu Lintas',
-      subtitle: 'Simulasi sinyal laboratorium berkala',
-      Illustration: TrafficIllustration,
-    },
-    {
-      num: 3 as const,
-      id: 'olahraga',
-      title: 'Kasus 3: Jadwal Olahraga',
-      subtitle: 'Jadwal latihan dan kalender bersama',
-      Illustration: SportsIllustration,
-    },
-    {
-      num: 4 as const,
-      id: 'agenda',
-      title: 'Kasus 4: Agenda Sekolah',
-      subtitle: 'Kegiatan literasi dan penelusuran tanggal',
-      Illustration: AgendaIllustration,
-    },
-  ];
+  const currentQuestions = questions
+    .filter((question) => question.track === currentTrack)
+    .slice()
+    .sort((a, b) => a.missionNumber - b.missionNumber);
+  const illustrations = { piket: PiketIllustration, lampu: TrafficIllustration, olahraga: SportsIllustration, agenda: AgendaIllustration };
+  const missionsMeta = currentQuestions.map((question) => ({
+    num: question.missionNumber,
+    id: question.id,
+    title: question.title,
+    subtitle: question.story,
+    question,
+    Illustration: illustrations[question.context],
+  }));
 
-  // Helper to compute mission completion status
-  const getMissionStatus = (missionNum: 1 | 2 | 3 | 4) => {
-    const q = questions.find(
-      (item) => item.missionNumber === missionNum && item.track === currentTrack
-    );
-    if (!q) return { label: 'Belum dimulai', status: 'not_started', count: 0, isComplete: false };
-
-    const answers = activeSubmission.answers[q.id];
-    if (!answers) return { label: 'Belum dimulai', status: 'not_started', count: 0, isComplete: false };
-
-    const step1Filled = Object.values(answers.step1 || {}).filter((v) => v.trim() !== '').length;
-    const step2Filled = Object.values(answers.step2 || {}).filter((v) => v.trim() !== '').length;
-    const step3Filled = Object.values(answers.step3 || {}).filter((v) => v.trim() !== '').length;
-    const step4Filled = Object.values(answers.step4 || {}).filter((v) => v.trim() !== '').length;
-
-    const totalFields =
-      q.step1Fields.length +
-      q.step2Fields.length +
-      q.step3Fields.length +
-      q.step4Fields.length;
-    const filledCount = step1Filled + step2Filled + step3Filled + step4Filled;
-
-    // Consider complete if key steps or majority answered
-    const isComplete =
+  // Completion is calculated against each question's actual field IDs.
+  const getMissionStatus = (question: (typeof currentQuestions)[number]) => {
+    const answers = activeSubmission.answers[question.id];
+    const steps = [
+      ['step1', question.step1Fields], ['step2', question.step2Fields],
+      ['step3', question.step3Fields], ['step4', question.step4Fields],
+    ] as const;
+    const totalFields = steps.reduce((count, [, fields]) => count + fields.length, 0);
+    const filledCount = steps.reduce((count, [step, fields]) => count + fields.filter((field) => Boolean(answers?.[step]?.[field.id]?.trim())).length, 0);
+    const isComplete = totalFields > 0 && (
       filledCount >= Math.max(3, totalFields * 0.7) ||
-      (step3Filled > 0 && step4Filled > 0);
-
-    if (activeSubmission.status === 'results_published') {
-      return { label: 'Selesai diperiksa', status: 'reviewed', count: filledCount, total: totalFields, isComplete: true };
-    }
-    if (activeSubmission.status === 'submitted_pending_review') {
-      return { label: 'Tersimpan & Dikirim', status: 'pending_review', count: filledCount, total: totalFields, isComplete: true };
-    }
-    if (isComplete) {
-      return { label: 'Kasus Selesai', status: 'complete', count: filledCount, total: totalFields, isComplete: true };
-    }
-    if (filledCount > 0) {
-      return { label: 'Sedang dikerjakan', status: 'in_progress', count: filledCount, total: totalFields, isComplete: false };
-    }
+      (Boolean(answers?.step3 && Object.values(answers.step3).some((value) => value.trim())) &&
+        Boolean(answers?.step4 && Object.values(answers.step4).some((value) => value.trim())))
+    );
+    if (activeSubmission.status === 'results_published') return { label: 'Selesai diperiksa', status: 'reviewed', count: filledCount, total: totalFields, isComplete: true };
+    if (activeSubmission.status === 'submitted_pending_review' || activeSubmission.status === 'time_expired_pending_review') return { label: 'Tersimpan & Dikirim', status: 'pending_review', count: filledCount, total: totalFields, isComplete: true };
+    if (isComplete) return { label: 'Kasus Selesai', status: 'complete', count: filledCount, total: totalFields, isComplete: true };
+    if (filledCount > 0) return { label: 'Sedang dikerjakan', status: 'in_progress', count: filledCount, total: totalFields, isComplete: false };
     return { label: 'Belum dimulai', status: 'not_started', count: 0, total: totalFields, isComplete: false };
   };
 
-  const statuses = missionsMeta.map((m) => getMissionStatus(m.num));
+  const statuses = currentQuestions.map(getMissionStatus);
   const completeCount = statuses.filter((s) => s.isComplete).length;
-  const allCasesCompleted = completeCount === 4;
-  const progressPercent = Math.round((completeCount / 4) * 100);
+  const allCasesCompleted = statuses.length > 0 && completeCount === statuses.length;
+  const progressPercent = statuses.length ? Math.round((completeCount / statuses.length) * 100) : 0;
 
   // Trigger celebration modal when all 4 cases are finished for the first time
   React.useEffect(() => {
@@ -129,7 +91,7 @@ export const MissionsHubView: React.FC<Props> = ({ onNavigate, onSelectMission }
   const formattedTime = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   const isTimeLow = timerSeconds < 300; // less than 5 minutes
 
-  const handleCaseSelect = (num: 1 | 2 | 3 | 4) => {
+  const handleCaseSelect = (num: number) => {
     soundManager.playClick();
     startMissionTimer();
     onSelectMission(num);
@@ -231,7 +193,7 @@ export const MissionsHubView: React.FC<Props> = ({ onNavigate, onSelectMission }
               Progres Kasus Selesai:
             </span>
             <span className="font-mono font-bold text-[#3E2723]">
-              {completeCount} / 4 Kasus ({progressPercent}%)
+              {completeCount} / {currentQuestions.length} Kasus ({progressPercent}%)
             </span>
           </div>
           <div className="w-full bg-[#FAF8F5] border border-[#EAE3D9] rounded-full h-3 overflow-hidden">
@@ -247,8 +209,8 @@ export const MissionsHubView: React.FC<Props> = ({ onNavigate, onSelectMission }
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {missionsMeta.map((m) => {
           const Illustration = m.Illustration;
-          const statusInfo = getMissionStatus(m.num);
-          const missionQuestion = questions.find((question) => question.missionNumber === m.num && question.track === currentTrack);
+          const statusInfo = getMissionStatus(m.question);
+          const missionQuestion = m.question;
 
           let badgeColor = 'text-[#6D5A50] bg-neutral-100';
           let StatusIcon = PlayCircle;
@@ -263,7 +225,7 @@ export const MissionsHubView: React.FC<Props> = ({ onNavigate, onSelectMission }
 
           return (
             <div
-              key={m.num}
+              key={m.id}
               onClick={() => handleCaseSelect(m.num)}
               className="bg-white border-2 border-[#EAE3D9] hover:border-[#FF913D] rounded-2xl p-6 transition-all shadow-xs hover:shadow-md cursor-pointer flex flex-col justify-between space-y-4 group"
             >
@@ -319,8 +281,8 @@ export const MissionsHubView: React.FC<Props> = ({ onNavigate, onSelectMission }
           </div>
           <p>
             {allCasesCompleted
-              ? 'Selamat! Seluruh 4 kasus telah selesai dikerjakan. Hasil kelompok kini dapat dilihat.'
-              : `Kelompokmu telah menyelesaikan ${completeCount} dari 4 kasus. Selesaikan seluruh 4 kasus untuk melihat hasil kelompok.`}
+              ? `Selamat! Seluruh ${currentQuestions.length} kasus telah selesai dikerjakan. Hasil kelompok kini dapat dilihat.`
+              : `Kelompokmu telah menyelesaikan ${completeCount} dari ${currentQuestions.length} kasus. Selesaikan seluruh kasus untuk melihat hasil kelompok.`}
           </p>
         </div>
 
@@ -334,7 +296,7 @@ export const MissionsHubView: React.FC<Props> = ({ onNavigate, onSelectMission }
           }`}
         >
           <Award className="w-4 h-4" />
-          <span>{allCasesCompleted ? 'Lihat Hasil Kelompok' : `Terkunci (${completeCount}/4 Kasus Selesai)`}</span>
+          <span>{allCasesCompleted ? 'Lihat Hasil Kelompok' : `Terkunci (${completeCount}/${currentQuestions.length} Kasus Selesai)`}</span>
         </button>
       </div>
 

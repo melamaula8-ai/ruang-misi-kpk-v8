@@ -23,9 +23,9 @@ import { soundManager } from '../../utils/sound';
 import { MissionSubmissionAnswers } from '../../types';
 
 interface Props {
-  missionNumber: 1 | 2 | 3 | 4;
+  missionNumber: number;
   onNavigate: (view: string) => void;
-  onSelectMission: (missionNum: 1 | 2 | 3 | 4) => void;
+  onSelectMission: (missionNum: number) => void;
 }
 
 export const MissionDetailView: React.FC<Props> = ({
@@ -56,6 +56,7 @@ export const MissionDetailView: React.FC<Props> = ({
   const question = questions.find(
     (q) => q.missionNumber === missionNumber && q.track === currentTrack
   );
+  const questionCount = questions.filter((q) => q.track === currentTrack).length;
 
   // Submission answers for this question
   const currentAnswers = (question && activeSubmission.answers[question.id]) || {
@@ -246,7 +247,7 @@ export const MissionDetailView: React.FC<Props> = ({
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
           <div className="md:col-span-8 space-y-3">
             <div className="inline-flex max-w-full flex-wrap items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-extrabold uppercase bg-[#FFE082]/55 text-[#6F4736]">
-              Kasus {missionNumber} dari 4 · Orientasi Masalah
+              Kasus {missionNumber} dari {questionCount} · Orientasi Masalah
             </div>
             <h1 className="text-xl sm:text-2xl font-extrabold text-[#3E2723]">
               {question.title}
@@ -320,7 +321,7 @@ export const MissionDetailView: React.FC<Props> = ({
       {/* Polya Step Work Area */}
       <section className="practice-question-card mission-work-card min-w-0 space-y-6 rounded-2xl border border-[#EAE3D9] bg-white p-4 pt-6 shadow-md sm:p-8 sm:pt-8">
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#EAE3D9] bg-gradient-to-r from-[#F4F9E9] via-white to-[#FFF7DC] px-4 py-3">
-          <div><span className="text-xs font-black uppercase tracking-wider text-[#95634F]">Ruang kerja kelompok</span><p className="mt-0.5 text-sm font-bold text-[#3E2723]">Kasus {missionNumber} dari 4 · Langkah {Number(activeStep.slice(-1))} dari 4</p></div>
+          <div><span className="text-xs font-black uppercase tracking-wider text-[#95634F]">Ruang kerja kelompok</span><p className="mt-0.5 text-sm font-bold text-[#3E2723]">Kasus {missionNumber} dari {questionCount} · Langkah {Number(activeStep.slice(-1))} dari 4</p></div>
           <div className="flex items-center gap-1.5" aria-label={`Langkah ${Number(activeStep.slice(-1))} dari 4`}>
             {polyaSteps.map((step, index) => <span key={step.id} className={`h-2.5 w-7 rounded-full sm:w-10 ${index < Number(activeStep.slice(-1)) ? 'bg-[#FF913D]' : 'bg-[#EAE3D9]'}`} />)}
           </div>

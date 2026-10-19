@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useAssessment } from '../../context/AssessmentContext';
 import { exportAssessmentToExcel } from '../../utils/excelExport';
+import { getQuestionAnswerRows } from '../../utils/questionAnswerRows';
 import { audioCelebration } from '../../utils/audioCelebration';
 
 interface Props {
@@ -24,7 +25,7 @@ interface Props {
 }
 
 export const ResultsEvaluationView: React.FC<Props> = ({ onNavigate }) => {
-  const { activeSubmission, activeGroupToken, questions, currentTrack, rubricConfig } = useAssessment();
+  const { activeSubmission, activeGroupToken, questions, rubricConfig } = useAssessment();
 
   const isPublished = activeSubmission.status === 'results_published';
   const isPending =
@@ -55,7 +56,7 @@ export const ResultsEvaluationView: React.FC<Props> = ({ onNavigate }) => {
   };
 
   // Questions of current track
-  const currentQuestions = questions.filter((q) => q.track === currentTrack);
+  const currentQuestions = questions.filter((q) => q.track === activeSubmission.track);
 
   const evaluation = activeSubmission.evaluation;
 
@@ -80,7 +81,7 @@ export const ResultsEvaluationView: React.FC<Props> = ({ onNavigate }) => {
                 {activeGroupToken.className}
               </span>
             )}{' '}
-            · Pintu: <strong className="uppercase text-[#95634F]">{currentTrack}</strong>
+            · Pintu: <strong className="uppercase text-[#95634F]">{activeSubmission.track}</strong>
           </p>
         </div>
 
@@ -94,7 +95,8 @@ export const ResultsEvaluationView: React.FC<Props> = ({ onNavigate }) => {
                 exportAssessmentToExcel(
                   [activeSubmission],
                   rubricConfig,
-                  `Hasil_Asesmen_KPK_${teamName}`
+                  `Hasil_Asesmen_KPK_${teamName}`,
+                  questions
                 );
               }}
               className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
@@ -270,7 +272,7 @@ export const ResultsEvaluationView: React.FC<Props> = ({ onNavigate }) => {
                   Nilai Akhir
                 </span>
                 <div className="text-4xl font-extrabold text-[#3E2723] font-mono mt-1">
-                  {evaluation?.totalScore ?? 85}
+                  {evaluation?.totalScore ?? '—'}
                   <span className="text-lg text-[#8C7A70] font-normal"> / 100</span>
                 </div>
               </div>
@@ -292,7 +294,7 @@ export const ResultsEvaluationView: React.FC<Props> = ({ onNavigate }) => {
           {/* Section Breakdown per Mission */}
           <div className="space-y-6">
             <h2 className="text-xl font-bold text-[#3E2723]">
-              Rincian Evaluasi & Pembahasan Empat Misi
+              Rincian Evaluasi & Pembahasan {currentQuestions.length} Kasus
             </h2>
 
             {currentQuestions.map((q) => {
@@ -303,6 +305,8 @@ export const ResultsEvaluationView: React.FC<Props> = ({ onNavigate }) => {
                 step4: {},
               };
               const missionEval = evaluation?.missions?.[q.missionNumber];
+              const missionRubric = rubricConfig[`mission${q.missionNumber}`] || rubricConfig.mission1;
+              const missionMaxScore = missionRubric.step1 + missionRubric.step2 + missionRubric.step3 + missionRubric.step4;
 
               return (
                 <div
@@ -323,7 +327,7 @@ export const ResultsEvaluationView: React.FC<Props> = ({ onNavigate }) => {
                         <div className="text-right">
                           <span className="text-xs text-[#8C7A70]">Skor Misi:</span>
                           <span className="font-mono text-base font-bold text-[#3E2723] ml-1.5 bg-[#FAF8F5] px-2 py-0.5 border border-[#EAE3D9] rounded">
-                            {missionEval.totalScore} / 20
+                            {missionEval.totalScore} / {missionMaxScore}
                           </span>
                         </div>
                       )}
@@ -338,15 +342,13 @@ export const ResultsEvaluationView: React.FC<Props> = ({ onNavigate }) => {
                         <span className="font-bold text-[#3E2723]">
                           Tahap 1: Memahami Masalah
                         </span>
-                        <VerdictBadge verdict={missionEval?.step1?.verdict || 'correct'} />
+                        <VerdictBadge verdict={missionEval?.step1?.verdict || 'pending'} />
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
                         <div>
                           <span className="text-[#8C7A70] block font-semibold">Jawaban Saya:</span>
                           <p className="text-[#2D231E] font-medium bg-white p-2 rounded border border-[#E8DFD8] mt-0.5">
-                            {Object.entries(studentAnswers.step1 || {})
-                              .map(([k, v]) => `${k}: ${v}`)
-                              .join('; ') || 'Belum diisi'}
+                            {getQuestionAnswerRows(q, 'step1', studentAnswers).filter((row) => row.answer.trim()).map((row) => `${row.label}: ${row.answer}`).join('; ') || 'Belum diisi'}
                           </p>
                         </div>
                         <div>
@@ -364,13 +366,13 @@ export const ResultsEvaluationView: React.FC<Props> = ({ onNavigate }) => {
                         <span className="font-bold text-[#3E2723]">
                           Tahap 2: Menyusun Rencana
                         </span>
-                        <VerdictBadge verdict={missionEval?.step2?.verdict || 'correct'} />
+                        <VerdictBadge verdict={missionEval?.step2?.verdict || 'pending'} />
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
                         <div>
                           <span className="text-[#8C7A70] block font-semibold">Strategi yang Ditulis Murid:</span>
                           <p className="text-[#2D231E] font-medium bg-white p-2 rounded border border-[#E8DFD8] mt-0.5">
-                            {studentAnswers.step2?.strategy_plan || studentAnswers.step2?.strategy_choice || 'Belum diisi'}
+                            {getQuestionAnswerRows(q, 'step2', studentAnswers).filter((row) => row.answer.trim()).map((row) => `${row.label}: ${row.answer}`).join('; ') || 'Belum diisi'}
                           </p>
                         </div>
                         <div>
@@ -388,14 +390,13 @@ export const ResultsEvaluationView: React.FC<Props> = ({ onNavigate }) => {
                         <span className="font-bold text-[#3E2723]">
                           Tahap 3: Melaksanakan Rencana (KPK & Hasil Akhir)
                         </span>
-                        <VerdictBadge verdict={missionEval?.step3?.verdict || 'correct'} />
+                        <VerdictBadge verdict={missionEval?.step3?.verdict || 'pending'} />
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
                         <div>
                           <span className="text-[#8C7A70] block font-semibold">Jawaban Saya:</span>
                           <div className="bg-white p-2 rounded border border-[#E8DFD8] mt-0.5 space-y-1 font-mono">
-                            <div>KPK: {studentAnswers.step3?.lcm_value || studentAnswers.step3?.days_interval || '-'}</div>
-                            <div>Jawaban Akhir: {studentAnswers.step3?.final_date || studentAnswers.step3?.final_answer || '-'}</div>
+                            {getQuestionAnswerRows(q, 'step3', studentAnswers).filter((row) => row.answer.trim()).map((row) => <div key={row.id}>{row.label}: {row.answer}</div>)}
                           </div>
                         </div>
                         <div>
@@ -414,13 +415,13 @@ export const ResultsEvaluationView: React.FC<Props> = ({ onNavigate }) => {
                         <span className="font-bold text-[#3E2723]">
                           Tahap 4: Memeriksa Kembali
                         </span>
-                        <VerdictBadge verdict={missionEval?.step4?.verdict || 'correct'} />
+                        <VerdictBadge verdict={missionEval?.step4?.verdict || 'pending'} />
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
                         <div>
                           <span className="text-[#8C7A70] block font-semibold">Pemeriksaan Murid:</span>
                           <p className="text-[#2D231E] font-medium bg-white p-2 rounded border border-[#E8DFD8] mt-0.5">
-                            {studentAnswers.step4?.check_divisible || studentAnswers.step4?.proof_divisibility || 'Belum diisi'}
+                            {getQuestionAnswerRows(q, 'step4', studentAnswers).filter((row) => row.answer.trim()).map((row) => `${row.label}: ${row.answer}`).join('; ') || 'Belum diisi'}
                           </p>
                         </div>
                         <div>

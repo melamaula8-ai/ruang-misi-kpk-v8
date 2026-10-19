@@ -36,6 +36,8 @@ import { useAssessment } from '../../context/AssessmentContext';
 import type { LearningContent } from '../../context/AssessmentContext';
 import { calculateLCM, addDaysToDate, checkSimilarity } from '../../utils/math';
 import { exportAssessmentToExcel } from '../../utils/excelExport';
+import { getQuestionAnswerRows } from '../../utils/questionAnswerRows';
+import { INITIAL_QUESTION_BANK } from '../../data/questionBank';
 
 interface Props {
   onNavigate: (view: string) => void;
@@ -50,14 +52,12 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
     createNewSubmission,
     deleteSubmissionResponse,
     questions,
-    updateQuestion,
-    resetQuestionsToDefault,
     trackLockConfig,
     setTrackLockConfig,
     rubricConfig,
     updateRubricConfig,
     saveEvaluation,
-    publishResults,
+    publishEvaluationResults,
     requestRevision,
     reopenAssessment,
     customLogoUrl,
@@ -79,9 +79,40 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
   // Currently selected submission for grading
   const selectedSubmission =
     allSubmissions.find((s) => s.id === activeSubmissionId) || allSubmissions[0];
+  const reviewQuestions = questions
+    .filter((question) => question.track === selectedSubmission?.track)
+    .slice()
+    .sort((a, b) => a.missionNumber - b.missionNumber);
+  const rubricForMission = (missionNumber: number) =>
+    rubricConfig[`mission${missionNumber}`] || rubricConfig.mission1;
+  const initialMissionScores = () => {
+    const defaults: Record<number, { step1: number; step2: number; step3: number; step4: number; status: ReviewVerdict; feedback: string }> = {};
+    for (let missionNumber = 1; missionNumber <= 4; missionNumber += 1) {
+      const saved = selectedSubmission?.evaluation?.missions?.[missionNumber];
+      defaults[missionNumber] = {
+        step1: saved?.step1?.score ?? 0,
+        step2: saved?.step2?.score ?? 0,
+        step3: saved?.step3?.score ?? 0,
+        step4: saved?.step4?.score ?? 0,
+        status: saved?.missionVerdict ?? 'pending',
+        feedback: saved?.feedback ?? '',
+      };
+    }
+    return { ...defaults, ...Object.fromEntries(reviewQuestions.map((question) => {
+      const saved = selectedSubmission?.evaluation?.missions?.[question.missionNumber];
+      return [question.missionNumber, {
+      step1: saved?.step1?.score ?? 0,
+      step2: saved?.step2?.score ?? 0,
+      step3: saved?.step3?.score ?? 0,
+      step4: saved?.step4?.score ?? 0,
+      status: saved?.missionVerdict ?? 'pending' as ReviewVerdict,
+      feedback: saved?.feedback ?? '',
+      }];
+    })) };
+  };
 
   // Grading states for the selected submission
-  const [editingMissionNum, setEditingMissionNum] = useState<1 | 2 | 3 | 4>(1);
+  const [editingMissionNum, setEditingMissionNum] = useState<number>(reviewQuestions[0]?.missionNumber ?? 1);
   const [missionScores, setMissionScores] = useState<
     Record<
       number,
@@ -94,23 +125,27 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
         feedback: string;
       }
     >
-  >({
-    1: { step1: 4, step2: 4, step3: 8, step4: 4, status: 'correct', feedback: 'Bagus, kelipatan dan tanggal ditemukan dengan teliti.' },
-    2: { step1: 4, step2: 4, step3: 8, step4: 4, status: 'correct', feedback: 'Pengamatan simulasi lampu sinyal tepat.' },
-    3: { step1: 4, step2: 4, step3: 8, step4: 4, status: 'correct', feedback: 'Perhitungan KPK dan penambahan kalender tepat.' },
-    4: { step1: 4, step2: 4, step3: 8, step4: 4, status: 'correct', feedback: 'Penelusuran penambahan hari melintasi bulan dikerjakan dengan sangat baik.' },
-  });
+  >(initialMissionScores);
 
   const [presentationScore, setPresentationScore] = useState({
-    accuracy: 8,
-    strategy: 6,
-    collaboration: 6,
-    comments: 'Kelompok menyajikan hasil secara runtut dan bekerja sama dengan baik.',
+    accuracy: selectedSubmission?.evaluation?.presentation?.accuracy ?? 0,
+    strategy: selectedSubmission?.evaluation?.presentation?.strategy ?? 0,
+    collaboration: selectedSubmission?.evaluation?.presentation?.collaboration ?? 0,
+    comments: selectedSubmission?.evaluation?.presentation?.comments ?? '',
   });
 
-  const [generalFeedback, setGeneralFeedback] = useState(
-    'Kelompok menunjukkan kerja sama yang sangat baik dalam memahami konsep KPK dan menghubungkannya dengan kalender nyata.'
-  );
+  const [generalFeedback, setGeneralFeedback] = useState(selectedSubmission?.evaluation?.generalFeedback ?? '');
+  React.useEffect(() => {
+    setMissionScores(initialMissionScores());
+    setEditingMissionNum(reviewQuestions[0]?.missionNumber ?? 1);
+    setPresentationScore({
+      accuracy: selectedSubmission?.evaluation?.presentation?.accuracy ?? 0,
+      strategy: selectedSubmission?.evaluation?.presentation?.strategy ?? 0,
+      collaboration: selectedSubmission?.evaluation?.presentation?.collaboration ?? 0,
+      comments: selectedSubmission?.evaluation?.presentation?.comments ?? '',
+    });
+    setGeneralFeedback(selectedSubmission?.evaluation?.generalFeedback ?? '');
+  }, [selectedSubmission?.id]);
 
   // Revision Modal State
   const [revisionModalOpen, setRevisionModalOpen] = useState(false);
@@ -165,82 +200,62 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
     catch { setTokenNotice(`Salin ID secara manual: ${code}`); }
   };
 
-  // Compute total score from current edits
-  const totalScoreCalc =
-    Object.values(missionScores).reduce(
-      (acc, m) => acc + m.step1 + m.step2 + m.step3 + m.step4,
-      0
-    ) +
-    presentationScore.accuracy +
-    presentationScore.strategy +
-    presentationScore.collaboration;
+  const scoreForMission = (missionNumber: number) => missionScores[missionNumber] || {
+    step1: 0, step2: 0, step3: 0, step4: 0, status: 'pending' as ReviewVerdict, feedback: '',
+  };
+  const maxCaseScore = reviewQuestions.reduce((sum, question) => {
+    const rubric = rubricForMission(question.missionNumber);
+    return sum + rubric.step1 + rubric.step2 + rubric.step3 + rubric.step4;
+  }, 0);
+  const rawCaseScore = reviewQuestions.reduce((sum, question) => {
+    const score = scoreForMission(question.missionNumber);
+    return sum + score.step1 + score.step2 + score.step3 + score.step4;
+  }, 0);
+  const presentationRubric = rubricConfig.presentation;
+  const maxPresentationScore = presentationRubric.accuracy + presentationRubric.strategy + presentationRubric.collaboration;
+  const rawPresentationScore = presentationScore.accuracy + presentationScore.strategy + presentationScore.collaboration;
+  const totalScoreCalc = Math.round(
+    (maxCaseScore ? (rawCaseScore / maxCaseScore) * 80 : 0) +
+    (maxPresentationScore ? (rawPresentationScore / maxPresentationScore) * 20 : 0)
+  );
 
-  // Handler to save evaluation
-  const handleSaveEvaluation = () => {
-    if (!selectedSubmission) return;
-
-    const evaluation: FullEvaluation = {
-      missions: {
-        1: {
-          step1: { score: missionScores[1].step1, maxScore: rubricConfig.mission1.step1, verdict: missionScores[1].status },
-          step2: { score: missionScores[1].step2, maxScore: rubricConfig.mission1.step2, verdict: missionScores[1].status },
-          step3: { score: missionScores[1].step3, maxScore: rubricConfig.mission1.step3, verdict: missionScores[1].status },
-          step4: { score: missionScores[1].step4, maxScore: rubricConfig.mission1.step4, verdict: missionScores[1].status },
-          totalScore: missionScores[1].step1 + missionScores[1].step2 + missionScores[1].step3 + missionScores[1].step4,
-          missionVerdict: missionScores[1].status,
-          feedback: missionScores[1].feedback,
-        },
-        2: {
-          step1: { score: missionScores[2].step1, maxScore: rubricConfig.mission2.step1, verdict: missionScores[2].status },
-          step2: { score: missionScores[2].step2, maxScore: rubricConfig.mission2.step2, verdict: missionScores[2].status },
-          step3: { score: missionScores[2].step3, maxScore: rubricConfig.mission2.step3, verdict: missionScores[2].status },
-          step4: { score: missionScores[2].step4, maxScore: rubricConfig.mission2.step4, verdict: missionScores[2].status },
-          totalScore: missionScores[2].step1 + missionScores[2].step2 + missionScores[2].step3 + missionScores[2].step4,
-          missionVerdict: missionScores[2].status,
-          feedback: missionScores[2].feedback,
-        },
-        3: {
-          step1: { score: missionScores[3].step1, maxScore: rubricConfig.mission3.step1, verdict: missionScores[3].status },
-          step2: { score: missionScores[3].step2, maxScore: rubricConfig.mission3.step2, verdict: missionScores[3].status },
-          step3: { score: missionScores[3].step3, maxScore: rubricConfig.mission3.step3, verdict: missionScores[3].status },
-          step4: { score: missionScores[3].step4, maxScore: rubricConfig.mission3.step4, verdict: missionScores[3].status },
-          totalScore: missionScores[3].step1 + missionScores[3].step2 + missionScores[3].step3 + missionScores[3].step4,
-          missionVerdict: missionScores[3].status,
-          feedback: missionScores[3].feedback,
-        },
-        4: {
-          step1: { score: missionScores[4].step1, maxScore: rubricConfig.mission4.step1, verdict: missionScores[4].status },
-          step2: { score: missionScores[4].step2, maxScore: rubricConfig.mission4.step2, verdict: missionScores[4].status },
-          step3: { score: missionScores[4].step3, maxScore: rubricConfig.mission4.step3, verdict: missionScores[4].status },
-          step4: { score: missionScores[4].step4, maxScore: rubricConfig.mission4.step4, verdict: missionScores[4].status },
-          totalScore: missionScores[4].step1 + missionScores[4].step2 + missionScores[4].step3 + missionScores[4].step4,
-          missionVerdict: missionScores[4].status,
-          feedback: missionScores[4].feedback,
-        },
-      },
+  const buildEvaluation = (): FullEvaluation => {
+    const missions = Object.fromEntries(reviewQuestions.map((question) => {
+      const score = scoreForMission(question.missionNumber);
+      const rubric = rubricForMission(question.missionNumber);
+      const step = (key: 'step1' | 'step2' | 'step3' | 'step4') => ({ score: score[key], maxScore: rubric[key], verdict: score.status });
+      return [question.missionNumber, {
+        step1: step('step1'), step2: step('step2'), step3: step('step3'), step4: step('step4'),
+        totalScore: score.step1 + score.step2 + score.step3 + score.step4,
+        missionVerdict: score.status,
+        feedback: score.feedback,
+      }];
+    }));
+    return {
+      missions,
       presentation: {
         accuracy: presentationScore.accuracy,
         strategy: presentationScore.strategy,
         collaboration: presentationScore.collaboration,
-        totalScore: presentationScore.accuracy + presentationScore.strategy + presentationScore.collaboration,
+        totalScore: Math.round(maxPresentationScore ? (rawPresentationScore / maxPresentationScore) * 20 : 0),
         comments: presentationScore.comments,
       },
       totalScore: totalScoreCalc,
       generalFeedback,
-      practiceRecommendations: [
-        'Latih penulisan kelipatan berkala.',
-        'Perhatikan sisa hari saat melompati pergantian bulan.',
-      ],
+      practiceRecommendations: [],
       reviewedBy: teacherNameInput,
       publishedAt: new Date().toISOString(),
     };
+  };
 
-    saveEvaluation(selectedSubmission.id, evaluation);
+  const handleSaveEvaluation = () => {
+    if (selectedSubmission) saveEvaluation(selectedSubmission.id, buildEvaluation());
   };
 
   const handlePublishResults = () => {
-    handleSaveEvaluation();
-    publishResults(selectedSubmission.id);
+    if (!selectedSubmission) return;
+    const result = publishEvaluationResults(selectedSubmission.id, buildEvaluation());
+    if (!result.success) window.alert(result.message);
   };
 
   const handleRequestRevisionSubmit = () => {
@@ -257,7 +272,7 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
 
   // Multi-Sheet Microsoft Excel (.XLSX) Export
   const handleExportXLSX = () => {
-    exportAssessmentToExcel(allSubmissions, rubricConfig, 'Rekap_Asesmen_Formatif_KPK_Kelas_V');
+    exportAssessmentToExcel(allSubmissions, rubricConfig, 'Rekap_Asesmen_Formatif_KPK_Kelas_V', questions);
   };
 
   // Export single selected group to Excel
@@ -268,7 +283,8 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
     exportAssessmentToExcel(
       [selectedSubmission],
       rubricConfig,
-      `Kartu_Nilai_KPK_${groupName}`
+      `Kartu_Nilai_KPK_${groupName}`,
+      questions
     );
   };
 
@@ -322,13 +338,47 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
   const patchEditorQuestion = (questionId: string, patch: Partial<MissionQuestion>) => {
     setEditorDraft((draft) => ({ ...draft, questions: draft.questions.map((question) => question.id === questionId ? { ...question, ...patch } : question) }));
   };
-  const handleAddEditorQuestion = () => {
-    const base = editorQuestions.find((question) => question.track === editorTrack) || editorQuestions[0];
-    if (!base) return;
-    const id = `editor_${editorTrack}_${Date.now()}`;
-    const added: MissionQuestion = { ...base, id, title: `Soal baru · ${editorDraft.tracks[editorTrack].name}`, story: '', num1: 2, num2: 3, internalKey: { ...base.internalKey, kpk: 6, finalAnswer: '6' } };
+  const handleAddEditorQuestion = (track: LearningTrack = editorTrack) => {
+    const trackQuestions = editorDraft.questions.filter((question) => question.track === track);
+    const base = trackQuestions[0] || INITIAL_QUESTION_BANK.find((question) => question.track === track) || INITIAL_QUESTION_BANK[0];
+    const missionNumber = Math.max(0, ...trackQuestions.map((question) => question.missionNumber)) + 1;
+    const id = `editor_${track}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const added: MissionQuestion = {
+      ...base,
+      id,
+      track,
+      missionNumber,
+      title: `Kasus ${missionNumber}: Soal baru`,
+      story: '',
+      num1: 2,
+      num2: 3,
+      internalKey: { ...base.internalKey, kpk: 6, finalAnswer: '6' },
+    };
     setEditorDraft((draft) => ({ ...draft, questions: [...draft.questions, added] }));
     setEditorQuestionId(id);
+  };
+  const handleDeleteEditorQuestion = (questionId: string) => {
+    if (allSubmissions.some((submission) => submission.answers?.[questionId])) {
+      setEditorNotice('Soal ini sudah memiliki jawaban murid. Soal dipertahankan agar jawaban lama tetap dapat diperiksa.');
+      return;
+    }
+    setEditorDraft((draft) => ({ ...draft, questions: draft.questions.filter((question) => question.id !== questionId) }));
+    if (editorQuestionId === questionId) {
+      setEditorQuestionId(editorQuestions.find((question) => question.id !== questionId)?.id || '');
+    }
+  };
+  const handleEditorTrackChange = (question: MissionQuestion, track: LearningTrack) => {
+    const nextNumber = Math.max(0, ...editorQuestions.filter((item) => item.track === track && item.id !== question.id).map((item) => item.missionNumber)) + 1;
+    patchEditorQuestion(question.id, { track, missionNumber: nextNumber });
+  };
+  const handleEditorQuestionNumberChange = (question: MissionQuestion, rawValue: string) => {
+    const missionNumber = Number(rawValue);
+    if (!Number.isInteger(missionNumber) || missionNumber < 1) return;
+    if (editorQuestions.some((item) => item.id !== question.id && item.track === question.track && item.missionNumber === missionNumber)) {
+      setEditorNotice(`Nomor kasus ${missionNumber} sudah dipakai pada pintu ini.`);
+      return;
+    }
+    patchEditorQuestion(question.id, { missionNumber });
   };
   const moveEditorQuestion = (questionId: string, direction: -1 | 1) => {
     setEditorDraft((draft) => {
@@ -445,7 +495,7 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
           { id: 'kelompok' as const, label: 'Data Kelompok & Pintu', icon: Users },
           { id: 'akses_kelas' as const, label: 'Buat ID / Link Kelas', icon: KeyRound },
           { id: 'editor' as const, label: 'Editor Pembelajaran', icon: BookOpen },
-          { id: 'bank_soal' as const, label: 'Bank Soal 12 Variasi', icon: Edit },
+          { id: 'bank_soal' as const, label: 'Bank Soal', icon: Edit },
           { id: 'rubrik' as const, label: 'Pengaturan Bobot Rubrik', icon: Sliders },
           { id: 'rekap' as const, label: 'Rekap Nilai & Ekspor', icon: Download },
         ].map((tab) => {
@@ -698,29 +748,25 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
           </div>
 
           {/* Mission Selector Subtabs */}
-          <div className="flex items-center gap-2 border-b border-[#EAE3D9] pb-2">
-            {[1, 2, 3, 4].map((num) => (
+          <div className="grid grid-cols-2 gap-2 border-b border-[#EAE3D9] pb-2 sm:grid-cols-3 lg:grid-cols-4">
+            {reviewQuestions.map((question) => (
               <button
-                key={num}
-                onClick={() => setEditingMissionNum(num as 1 | 2 | 3 | 4)}
+                key={question.id}
+                onClick={() => setEditingMissionNum(question.missionNumber)}
                 className={`px-4 py-2 text-xs font-bold rounded-xl transition-colors ${
-                  editingMissionNum === num
+                  editingMissionNum === question.missionNumber
                     ? 'bg-[#3E2723] text-white'
                     : 'bg-white text-[#6D5A50] border border-[#EAE3D9] hover:bg-[#FAF8F5]'
                 }`}
               >
-                Misi {num} (Piket, Lampu, Olahraga, Agenda)
+                Kasus {question.missionNumber}: {question.title}
               </button>
             ))}
           </div>
 
           {/* Active Mission Inspection Box */}
           {(() => {
-            const currentQ = questions.find(
-              (q) =>
-                q.missionNumber === editingMissionNum &&
-                q.track === selectedSubmission.track
-            );
+            const currentQ = reviewQuestions.find((q) => q.missionNumber === editingMissionNum);
             if (!currentQ) return null;
 
             const studentAns = selectedSubmission.answers[currentQ.id] || {
@@ -729,7 +775,8 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
               step3: {},
               step4: {},
             };
-            const currentMissionScore = missionScores[editingMissionNum];
+            const currentMissionScore = scoreForMission(editingMissionNum);
+            const currentRubric = rubricForMission(editingMissionNum);
 
             return (
               <div className="bg-white border border-[#EAE3D9] rounded-2xl p-6 sm:p-8 space-y-6 shadow-xs">
@@ -779,27 +826,27 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
                         <input
                           type="number"
                           min="0"
-                          max="4"
+                          max={currentRubric.step1}
                           value={currentMissionScore.step1}
                           onChange={(e) =>
                             setMissionScores({
                               ...missionScores,
                               [editingMissionNum]: {
                                 ...currentMissionScore,
-                                step1: parseInt(e.target.value, 10) || 0,
+                                step1: Math.min(currentRubric.step1, Math.max(0, parseInt(e.target.value, 10) || 0)),
                               },
                             })
                           }
                           className="w-12 px-1.5 py-0.5 bg-white border border-[#D8CFC8] rounded text-center font-bold"
                         />
-                        <span className="text-[#8C7A70]">/ 4</span>
+                        <span className="text-[#8C7A70]">/ {currentRubric.step1}</span>
                       </div>
                     </div>
                     <div className="bg-white p-2.5 rounded-lg border border-[#E8DFD8] text-[11px] space-y-1">
                       <span className="font-semibold text-[#8C7A70] block">Jawaban Murid:</span>
-                      {Object.entries(studentAns.step1 || {}).map(([k, v]) => (
-                        <div key={k}>
-                          <strong>{k}:</strong> {v || '(kosong)'}
+                      {getQuestionAnswerRows(currentQ, 'step1', studentAns).map((row) => (
+                        <div key={row.id} className="break-words">
+                          <strong>{row.label}:</strong> {row.answer || '(Belum diisi)'}
                         </div>
                       ))}
                     </div>
@@ -816,25 +863,25 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
                         <input
                           type="number"
                           min="0"
-                          max="4"
+                          max={currentRubric.step2}
                           value={currentMissionScore.step2}
                           onChange={(e) =>
                             setMissionScores({
                               ...missionScores,
                               [editingMissionNum]: {
                                 ...currentMissionScore,
-                                step2: parseInt(e.target.value, 10) || 0,
+                                step2: Math.min(currentRubric.step2, Math.max(0, parseInt(e.target.value, 10) || 0)),
                               },
                             })
                           }
                           className="w-12 px-1.5 py-0.5 bg-white border border-[#D8CFC8] rounded text-center font-bold"
                         />
-                        <span className="text-[#8C7A70]">/ 4</span>
+                        <span className="text-[#8C7A70]">/ {currentRubric.step2}</span>
                       </div>
                     </div>
                     <div className="bg-white p-2.5 rounded-lg border border-[#E8DFD8] text-[11px] space-y-1">
                       <span className="font-semibold text-[#8C7A70] block">Strategi Murid:</span>
-                      <p>{studentAns.step2?.strategy_plan || studentAns.step2?.strategy_choice || '(kosong)'}</p>
+                      {getQuestionAnswerRows(currentQ, 'step2', studentAns).map((row) => <p key={row.id} className="break-words"><strong>{row.label}:</strong> {row.answer || '(Belum diisi)'}</p>)}
                     </div>
                   </div>
 
@@ -849,31 +896,25 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
                         <input
                           type="number"
                           min="0"
-                          max="8"
+                          max={currentRubric.step3}
                           value={currentMissionScore.step3}
                           onChange={(e) =>
                             setMissionScores({
                               ...missionScores,
                               [editingMissionNum]: {
                                 ...currentMissionScore,
-                                step3: parseInt(e.target.value, 10) || 0,
+                                step3: Math.min(currentRubric.step3, Math.max(0, parseInt(e.target.value, 10) || 0)),
                               },
                             })
                           }
                           className="w-12 px-1.5 py-0.5 bg-white border border-[#D8CFC8] rounded text-center font-bold"
                         />
-                        <span className="text-[#8C7A70]">/ 8</span>
+                        <span className="text-[#8C7A70]">/ {currentRubric.step3}</span>
                       </div>
                     </div>
                     <div className="bg-white p-2.5 rounded-lg border border-[#E8DFD8] text-[11px] space-y-1">
-                      <div>
-                        <strong>KPK Murid:</strong> {studentAns.step3?.lcm_value || studentAns.step3?.days_interval || '-'}{' '}
-                        (Kunci: <strong>{currentQ.internalKey.kpk}</strong>)
-                      </div>
-                      <div>
-                        <strong>Jawaban Akhir Murid:</strong> {studentAns.step3?.final_date || studentAns.step3?.final_answer || '-'}{' '}
-                        (Kunci: <strong>{currentQ.internalKey.finalAnswer}</strong>)
-                      </div>
+                      {getQuestionAnswerRows(currentQ, 'step3', studentAns).map((row) => <div key={row.id} className="break-words"><strong>{row.label}:</strong> {row.answer || '(Belum diisi)'}{row.expectedAnswer && <span className="text-[#4A671E]"> · Kunci: {row.expectedAnswer}</span>}</div>)}
+                      <div><strong>Kunci KPK:</strong> {currentQ.internalKey.kpk} · <strong>Hasil:</strong> {currentQ.internalKey.finalAnswer}</div>
                     </div>
                   </div>
 
@@ -888,24 +929,24 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
                         <input
                           type="number"
                           min="0"
-                          max="4"
+                          max={currentRubric.step4}
                           value={currentMissionScore.step4}
                           onChange={(e) =>
                             setMissionScores({
                               ...missionScores,
                               [editingMissionNum]: {
                                 ...currentMissionScore,
-                                step4: parseInt(e.target.value, 10) || 0,
+                                step4: Math.min(currentRubric.step4, Math.max(0, parseInt(e.target.value, 10) || 0)),
                               },
                             })
                           }
                           className="w-12 px-1.5 py-0.5 bg-white border border-[#D8CFC8] rounded text-center font-bold"
                         />
-                        <span className="text-[#8C7A70]">/ 4</span>
+                        <span className="text-[#8C7A70]">/ {currentRubric.step4}</span>
                       </div>
                     </div>
                     <div className="bg-white p-2.5 rounded-lg border border-[#E8DFD8] text-[11px] space-y-1">
-                      <p>{studentAns.step4?.check_divisible || studentAns.step4?.proof_divisibility || '(kosong)'}</p>
+                      {getQuestionAnswerRows(currentQ, 'step4', studentAns).map((row) => <p key={row.id} className="break-words"><strong>{row.label}:</strong> {row.answer || '(Belum diisi)'}</p>)}
                     </div>
                   </div>
                 </div>
@@ -1279,10 +1320,10 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
           </section>
 
           <section className="space-y-5 rounded-2xl border border-[#EAE3D9] bg-white p-5 shadow-sm sm:p-7">
-            <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-lg font-black text-[#3E2723]">Editor soal dan aktivitas</h3><p className="text-sm text-[#6D5A50]">Sunting teks kasus, bilangan, kunci, tahapan, dan petunjuk per langkah. Gunakan tombol panah untuk menyusun urutan.</p></div><button type="button" onClick={handleAddEditorQuestion} className="inline-flex items-center gap-2 rounded-xl bg-[#4A671E] px-4 py-2.5 text-sm font-black text-white"><Plus size={17}/> Tambah soal</button></div>
+            <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-lg font-black text-[#3E2723]">Editor soal dan aktivitas</h3><p className="text-sm text-[#6D5A50]">Buat soal sebanyak yang dibutuhkan pada setiap pintu. Nomor soal mengikuti urutan di pintu tersebut.</p></div><button type="button" onClick={() => handleAddEditorQuestion(editorTrack)} className="inline-flex items-center gap-2 rounded-xl bg-[#4A671E] px-4 py-2.5 text-sm font-black text-white"><Plus size={17}/> Tambah soal · {editorDraft.tracks[editorTrack].name}</button></div>
             <div className="grid gap-4 lg:grid-cols-[minmax(220px,.72fr)_minmax(0,1.6fr)]">
-              <div className="max-h-[32rem] space-y-2 overflow-y-auto rounded-xl bg-[#FAF8F5] p-3">{editorQuestions.map((question, index) => <div key={question.id} className={`rounded-xl border p-3 ${selectedEditorQuestion?.id === question.id ? 'border-[#FF913D] bg-white' : 'border-[#EAE3D9] bg-white/70'}`}><button type="button" onClick={() => { setEditorTrack(question.track); setEditorQuestionId(question.id); }} className="w-full text-left"><span className="block text-xs font-black text-[#95634F]">{index + 1}. Misi {question.missionNumber} · {editorDraft.tracks[question.track].name}</span><span className="mt-1 block text-sm font-bold text-[#3E2723]">{question.title}</span></button><div className="mt-2 flex gap-1"><button type="button" aria-label="Pindahkan soal ke atas" disabled={index === 0} onClick={() => moveEditorQuestion(question.id, -1)} className="rounded-lg border px-3 py-1 text-sm disabled:opacity-40">↑</button><button type="button" aria-label="Pindahkan soal ke bawah" disabled={index === editorQuestions.length - 1} onClick={() => moveEditorQuestion(question.id, 1)} className="rounded-lg border px-3 py-1 text-sm disabled:opacity-40">↓</button><button type="button" onClick={() => setEditorDraft((draft) => ({ ...draft, questions: draft.questions.filter((item) => item.id !== question.id) }))} className="ml-auto rounded-lg border border-red-200 px-3 py-1 text-xs font-bold text-red-700">Hapus</button></div></div>)}</div>
-              {selectedEditorQuestion ? <div className="grid content-start gap-4 sm:grid-cols-2"><label className="space-y-1 text-sm font-bold text-[#3E2723]">Pintu soal<select value={selectedEditorQuestion.track} onChange={(event) => patchEditorQuestion(selectedEditorQuestion.id, { track: event.target.value as LearningTrack })} className="w-full rounded-xl border border-[#D8CFC8] p-3"><option value="penjelajah">Pintu 1 · Penjelajah</option><option value="pengembang">Pintu 2 · Pengembang</option><option value="inovator">Pintu 3 · Inovator</option></select></label><label className="space-y-1 text-sm font-bold text-[#3E2723]">Nomor kasus<select value={selectedEditorQuestion.missionNumber} onChange={(event) => patchEditorQuestion(selectedEditorQuestion.id, { missionNumber: Number(event.target.value) as 1 | 2 | 3 | 4 })} className="w-full rounded-xl border border-[#D8CFC8] p-3">{[1, 2, 3, 4].map((number) => <option key={number} value={number}>Kasus {number}</option>)}</select></label>{[
+              <div className="max-h-[32rem] space-y-2 overflow-y-auto rounded-xl bg-[#FAF8F5] p-3">{editorQuestions.map((question, index) => <div key={question.id} className={`rounded-xl border p-3 ${selectedEditorQuestion?.id === question.id ? 'border-[#FF913D] bg-white' : 'border-[#EAE3D9] bg-white/70'}`}><button type="button" onClick={() => { setEditorTrack(question.track); setEditorQuestionId(question.id); }} className="w-full text-left"><span className="block text-xs font-black text-[#95634F]">{index + 1}. Kasus {question.missionNumber} · {editorDraft.tracks[question.track].name}</span><span className="mt-1 block text-sm font-bold text-[#3E2723]">{question.title}</span></button><div className="mt-2 flex gap-1"><button type="button" aria-label="Pindahkan soal ke atas" disabled={index === 0} onClick={() => moveEditorQuestion(question.id, -1)} className="rounded-lg border px-3 py-1 text-sm disabled:opacity-40">↑</button><button type="button" aria-label="Pindahkan soal ke bawah" disabled={index === editorQuestions.length - 1} onClick={() => moveEditorQuestion(question.id, 1)} className="rounded-lg border px-3 py-1 text-sm disabled:opacity-40">↓</button><button type="button" onClick={() => handleDeleteEditorQuestion(question.id)} className="ml-auto rounded-lg border border-red-200 px-3 py-1 text-xs font-bold text-red-700">Hapus</button></div></div>)}</div>
+              {selectedEditorQuestion ? <div className="grid content-start gap-4 sm:grid-cols-2"><label className="space-y-1 text-sm font-bold text-[#3E2723]">Pintu soal<select value={selectedEditorQuestion.track} onChange={(event) => handleEditorTrackChange(selectedEditorQuestion, event.target.value as LearningTrack)} className="w-full rounded-xl border border-[#D8CFC8] p-3"><option value="penjelajah">Pintu 1 · Penjelajah</option><option value="pengembang">Pintu 2 · Pengembang</option><option value="inovator">Pintu 3 · Inovator</option></select></label><label className="space-y-1 text-sm font-bold text-[#3E2723]">Nomor kasus<input type="number" min="1" value={selectedEditorQuestion.missionNumber} onChange={(event) => handleEditorQuestionNumberChange(selectedEditorQuestion, event.target.value)} className="w-full rounded-xl border border-[#D8CFC8] p-3" /></label>{[
                 { key: 'title', label: 'Nama soal / aktivitas', rows: 1 }, { key: 'story', label: 'Cerita kasus', rows: 4 }, { key: 'step1Prompt', label: 'Instruksi tahap 1', rows: 2 }, { key: 'step2Prompt', label: 'Instruksi tahap 2', rows: 2 }, { key: 'step3Prompt', label: 'Instruksi tahap 3', rows: 2 }, { key: 'step4Prompt', label: 'Instruksi tahap 4', rows: 2 }, { key: 'explanation', label: 'Pembahasan / rubrik jawaban', rows: 3 }, { key: 'practiceAdvice', label: 'Saran belajar', rows: 2 },
               ].map(({ key, label, rows }) => <label key={key} className="space-y-1 text-sm font-bold text-[#3E2723]">{label}<textarea rows={rows} value={String(selectedEditorQuestion[key as keyof MissionQuestion] ?? '')} onChange={(event) => patchEditorQuestion(selectedEditorQuestion.id, { [key]: event.target.value })} className="w-full rounded-xl border border-[#D8CFC8] bg-[#FFFCF7] p-3 text-sm font-medium" /></label>)}
                 <label className="space-y-1 text-sm font-bold text-[#3E2723]">Bilangan 1<input type="number" min="1" value={selectedEditorQuestion.num1} onChange={(event) => patchEditorQuestion(selectedEditorQuestion.id, { num1: Math.max(1, Number(event.target.value) || 1) })} className="w-full rounded-xl border border-[#D8CFC8] p-3" /></label><label className="space-y-1 text-sm font-bold text-[#3E2723]">Bilangan 2<input type="number" min="1" value={selectedEditorQuestion.num2} onChange={(event) => patchEditorQuestion(selectedEditorQuestion.id, { num2: Math.max(1, Number(event.target.value) || 1) })} className="w-full rounded-xl border border-[#D8CFC8] p-3" /></label>
@@ -1296,36 +1337,34 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
         </div>
       )}
 
-      {/* TAB 4: BANK SOAL 12 VARIASI */}
+      {/* TAB 4: BANK SOAL */}
       {activeTab === 'bank_soal' && (
         <div className="space-y-6">
           <div className="bg-white border border-[#EAE3D9] rounded-2xl p-6 sm:p-8 space-y-4 shadow-xs">
             <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#EAE3D9] pb-4">
               <div>
                 <h3 className="text-base font-bold text-[#3E2723]">
-                  Pengelolaan Bank Soal (12 Variasi Lengkap)
+                  Bank Soal · {editorQuestions.length} soal
                 </h3>
                 <p className="text-xs text-[#6D5A50]">
-                  Edit teks, interval bilangan, tanggal awal, dan petunjuk. Perhitungan KPK dan tanggal akhir dihitung otomatis secara matematis.
+                  Atur jumlah soal tanpa batas untuk setiap pintu. Perubahan disimpan sebagai draf dan diterbitkan melalui Editor Pembelajaran.
                 </p>
               </div>
 
-              <button
-                onClick={() => {
-                  if (confirm('Kembalikan seluruh bank soal ke pengaturan awal prototipe?')) {
-                    resetQuestionsToDefault();
-                  }
-                }}
-                className="flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-[#FAF8F5] text-[#3E2723] border border-[#D8CFC8] text-xs font-bold rounded-xl transition-colors cursor-pointer"
-              >
-                <RotateCcw className="w-3.5 h-3.5 text-[#95634F]" />
-                <span>Reset ke Standar</span>
-              </button>
             </div>
 
-            {/* List of 12 Questions */}
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="text-sm font-bold text-[#3E2723]">Pintu belajar
+                <select value={editorTrack} onChange={(event) => setEditorTrack(event.target.value as LearningTrack)} className="ml-2 rounded-lg border border-[#D8CFC8] bg-white px-3 py-2">
+                  {(['penjelajah', 'pengembang', 'inovator'] as LearningTrack[]).map((track) => <option key={track} value={track}>{editorDraft.tracks[track].name}</option>)}
+                </select>
+              </label>
+              <span className="text-xs text-[#6D5A50]">{editorQuestions.filter((question) => question.track === editorTrack).length} soal pada pintu ini</span>
+              <button type="button" onClick={() => handleAddEditorQuestion(editorTrack)} className="ml-auto rounded-xl bg-[#4A671E] px-4 py-2.5 text-sm font-black text-white"><Plus size={16} className="mr-1 inline"/>Tambah soal</button>
+            </div>
+            {/* Daftar soal pada pintu aktif */}
             <div className="space-y-3">
-              {questions.map((q) => (
+              {editorQuestions.filter((q) => q.track === editorTrack).map((q) => (
                 <div
                   key={q.id}
                   className="bg-[#FAF8F5] border border-[#EAE3D9] p-4 rounded-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
@@ -1337,7 +1376,7 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
                       </span>
                       <h4 className="font-bold text-sm text-[#3E2723]">{q.title}</h4>
                     </div>
-                    <p className="text-xs text-[#6D5A50] line-clamp-1">{q.story}</p>
+                    <p className="text-xs text-[#6D5A50] line-clamp-2">{q.story || 'Belum ada teks soal.'}</p>
                     <div className="text-[11px] font-mono text-[#3E2723]">
                       Interval: <strong>{q.num1} & {q.num2} {q.unit}</strong> · KPK Terhitung:{' '}
                       <strong>{q.internalKey.kpk}</strong> · Kunci Jawaban Akhir:{' '}
@@ -1345,6 +1384,7 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
                     </div>
                   </div>
 
+                  <div className="flex gap-2">
                   <button
                     onClick={() => setEditingQuestion(q)}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-[#95634F] hover:bg-[#3E2723] text-white text-xs font-bold rounded-lg transition-colors cursor-pointer shrink-0"
@@ -1352,8 +1392,15 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
                     <Edit className="w-3.5 h-3.5 text-[#FFE082]" />
                     <span>Edit Soal & Bilangan</span>
                   </button>
+                  <button type="button" onClick={() => handleDeleteEditorQuestion(q.id)} className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-bold text-red-700">Hapus</button>
+                  </div>
                 </div>
               ))}
+            </div>
+            {editorNotice && <p role="status" className="text-sm font-semibold text-[#6F4736]">{editorNotice}</p>}
+            <div className="flex flex-wrap justify-end gap-3 border-t border-[#EAE3D9] pt-4">
+              <button type="button" disabled={editorBusy || cloudStatus !== 'online'} onClick={() => void saveEditor(false)} className="rounded-xl border border-[#95634F] bg-white px-5 py-3 text-sm font-black text-[#704A36] disabled:opacity-50">{editorBusy ? 'Menyimpan…' : 'Simpan Draf'}</button>
+              <button type="button" disabled={editorBusy || cloudStatus !== 'online' || !editorDraft.questions.length} onClick={() => { if (confirm('Terbitkan perubahan bank soal untuk murid?')) void saveEditor(true); }} className="rounded-xl bg-[#FF913D] px-5 py-3 text-sm font-black text-white shadow-sm disabled:opacity-50">{editorBusy ? 'Memproses…' : 'Terbitkan Soal'}</button>
             </div>
           </div>
 
@@ -1464,12 +1511,12 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
                   </button>
                   <button
                     onClick={() => {
-                      updateQuestion(editingQuestion);
+                      patchEditorQuestion(editingQuestion.id, editingQuestion);
                       setEditingQuestion(null);
                     }}
                     className="px-5 py-2 bg-[#FF913D] hover:bg-[#F2822B] text-white text-xs font-bold rounded-xl"
                   >
-                    Simpan Perubahan Soal
+                    Simpan ke Draf
                   </button>
                 </div>
               </div>

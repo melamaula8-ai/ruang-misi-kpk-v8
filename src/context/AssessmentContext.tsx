@@ -1651,8 +1651,12 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const now = new Date().toISOString();
 
     // Validasi kelengkapan penilaian
-    if (!evaluation.missions || Object.keys(evaluation.missions).length < 4) {
-      return { success: false, message: 'Harap periksa dan lengkapi skor untuk seluruh 4 misi sebelum memublikasikan.' };
+    const submission = allSubmissions.find((item) => item.id === submissionId);
+    const requiredMissionNumbers = submission
+      ? Array.from(new Set(questions.filter((question) => question.track === submission.track).map((question) => question.missionNumber)))
+      : [];
+    if (!requiredMissionNumbers.length || requiredMissionNumbers.some((number) => !evaluation.missions?.[number])) {
+      return { success: false, message: 'Periksa dan lengkapi penilaian untuk semua soal pada pintu murid sebelum memublikasikan.' };
     }
 
     setAllSubmissions((prev) =>

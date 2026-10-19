@@ -75,7 +75,7 @@ function MainApp() {
   } = useAssessment();
   const [currentView, setCurrentView] = useState<string>('beranda');
   const [showRoleLanding, setShowRoleLanding] = useState(true);
-  const [activeMissionNumber, setActiveMissionNumber] = useState<1 | 2 | 3 | 4>(1);
+  const [activeMissionNumber, setActiveMissionNumber] = useState(1);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [classCodeFromLink] = useState(() => {
     try { const params = new URLSearchParams(window.location.search); return (params.get('kelas') || params.get('class') || params.get('token') || '').trim().toUpperCase(); } catch { return ''; }
@@ -173,7 +173,7 @@ function MainApp() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleSelectMission = (missionNum: 1 | 2 | 3 | 4) => {
+  const handleSelectMission = (missionNum: number) => {
     soundManager.playClick();
     if (!hasVerifiedGroupToken) {
       setCurrentView('kelas');

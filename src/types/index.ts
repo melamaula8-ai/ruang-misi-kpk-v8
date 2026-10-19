@@ -58,7 +58,7 @@ export interface PolyaField {
 
 export interface MissionQuestion {
   id: string;
-  missionNumber: 1 | 2 | 3 | 4;
+  missionNumber: number;
   context: MissionContext;
   track: LearningTrack;
   title: string;
@@ -202,6 +202,7 @@ export interface AssessmentSubmission {
 }
 
 export interface RubricConfig {
+  [mission: `mission${number}`]: { step1: number; step2: number; step3: number; step4: number };
   mission1: { step1: number; step2: number; step3: number; step4: number };
   mission2: { step1: number; step2: number; step3: number; step4: number };
   mission3: { step1: number; step2: number; step3: number; step4: number };

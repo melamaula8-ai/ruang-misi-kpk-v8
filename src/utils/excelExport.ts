@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
-import { AssessmentSubmission, RubricConfig } from '../types';
+import { AssessmentSubmission, MissionQuestion, RubricConfig } from '../types';
+import { getQuestionAnswerRows } from './questionAnswerRows';
 
 /**
  * Calculates achievement category based on standard Indonesian formative assessment scales.
@@ -58,7 +59,8 @@ export const getStatusLabel = (status: string): string => {
 export const exportAssessmentToExcel = (
   submissions: AssessmentSubmission[],
   rubricConfig?: RubricConfig,
-  fileNamePrefix: string = 'Rekap_Asesmen_Ruang_Misi_KPK'
+  fileNamePrefix: string = 'Rekap_Asesmen_Ruang_Misi_KPK',
+  questions: MissionQuestion[] = []
 ) => {
   const wb = XLSX.utils.book_new();
 
@@ -77,10 +79,7 @@ export const exportAssessmentToExcel = (
       'Pintu Belajar (Tingkat)',
       'Anggota Tim',
       'Status Asesmen',
-      'Kasus 1',
-      'Kasus 2',
-      'Kasus 3',
-      'Kasus 4',
+      ...Array.from({ length: Math.max(0, ...submissions.map((sub) => questions.filter((question) => question.track === sub.track).length)) }, (_, index) => `Kasus ${index + 1}`),
       'Presentasi Kelompok',
       'Total Nilai (100)',
       'Predikat Capaian',
@@ -96,10 +95,7 @@ export const exportAssessmentToExcel = (
     const members = (sub.team.members || []).map((m) => m.name).filter(Boolean).join(', ');
 
     // Protect unconfirmed scores: Only export final scores if officially published
-    const m1Score = isPublished || isDraftReview ? (ev?.missions?.[1]?.totalScore ?? '-') : '-';
-    const m2Score = isPublished || isDraftReview ? (ev?.missions?.[2]?.totalScore ?? '-') : '-';
-    const m3Score = isPublished || isDraftReview ? (ev?.missions?.[3]?.totalScore ?? '-') : '-';
-    const m4Score = isPublished || isDraftReview ? (ev?.missions?.[4]?.totalScore ?? '-') : '-';
+    const missionScores = questions.filter((question) => question.track === sub.track).sort((a, b) => a.missionNumber - b.missionNumber).map((question) => (isPublished || isDraftReview ? (ev?.missions?.[question.missionNumber]?.totalScore ?? '-') : '-'));
     const presScore = isPublished || isDraftReview ? (ev?.presentation?.totalScore ?? '-') : '-';
     const totalScore = isPublished ? (ev?.totalScore ?? '-') : isDraftReview ? `[Draf: ${ev?.totalScore ?? '-'}]` : '-';
     const predikat = isPublished && typeof ev?.totalScore === 'number'
@@ -115,10 +111,7 @@ export const exportAssessmentToExcel = (
       getTrackLabel(sub.track),
       members || '-',
       getStatusLabel(sub.status),
-      m1Score,
-      m2Score,
-      m3Score,
-      m4Score,
+      ...missionScores,
       presScore,
       totalScore,
       predikat,
@@ -155,35 +148,12 @@ export const exportAssessmentToExcel = (
   // ==========================================
   const detailPolyaData: (string | number)[][] = [
     ['RINCIAN SKOR 4 TAHAP POLYA PER KASUS MATEMATIKA'],
-    ['Skor maksimal per kasus = 20 (Tahap 1 = 4, Tahap 2 = 4, Tahap 3 = 8, Tahap 4 = 4) | Presentasi = 20'],
+    ['Skor maksimal per tahap mengikuti bobot rubrik yang ditetapkan guru | Presentasi = 20'],
     [''],
     [
       'Nama Kelompok',
       'Pintu Belajar',
-      // Kasus 1
-      'K1: T1 (Memahami)',
-      'K1: T2 (Rencana)',
-      'K1: T3 (Selesai)',
-      'K1: T4 (Periksa)',
-      'K1: Subtotal',
-      // Kasus 2
-      'K2: T1 (Memahami)',
-      'K2: T2 (Rencana)',
-      'K2: T3 (Selesai)',
-      'K2: T4 (Periksa)',
-      'K2: Subtotal',
-      // Kasus 3
-      'K3: T1 (Memahami)',
-      'K3: T2 (Rencana)',
-      'K3: T3 (Selesai)',
-      'K3: T4 (Periksa)',
-      'K3: Subtotal',
-      // Kasus 4
-      'K4: T1 (Memahami)',
-      'K4: T2 (Rencana)',
-      'K4: T3 (Selesai)',
-      'K4: T4 (Periksa)',
-      'K4: Subtotal',
+      ...Array.from({ length: Math.max(0, ...submissions.map((sub) => questions.filter((question) => question.track === sub.track).length)) }, (_, index) => [`K${index + 1}: T1 (Memahami)`, `K${index + 1}: T2 (Rencana)`, `K${index + 1}: T3 (Selesai)`, `K${index + 1}: T4 (Periksa)`, `K${index + 1}: Subtotal`]).flat(),
       // Presentasi
       'Pres: Ketepatan (8)',
       'Pres: Strategi (6)',
@@ -196,39 +166,16 @@ export const exportAssessmentToExcel = (
 
   submissions.forEach((sub) => {
     const ev = sub.evaluation;
-    const m1 = ev?.missions?.[1];
-    const m2 = ev?.missions?.[2];
-    const m3 = ev?.missions?.[3];
-    const m4 = ev?.missions?.[4];
+    const missionScoreValues = questions.filter((question) => question.track === sub.track).sort((a, b) => a.missionNumber - b.missionNumber).flatMap((question) => {
+      const mission = ev?.missions?.[question.missionNumber];
+      return [mission?.step1?.score ?? (mission as any)?.step1Score ?? '-', mission?.step2?.score ?? (mission as any)?.step2Score ?? '-', mission?.step3?.score ?? (mission as any)?.step3Score ?? '-', mission?.step4?.score ?? (mission as any)?.step4Score ?? '-', mission?.totalScore ?? '-'];
+    });
     const pres = ev?.presentation;
 
     detailPolyaData.push([
       sub.team.teamName || 'Kelompok Belajar',
       getTrackLabel(sub.track),
-      // M1
-      m1?.step1?.score ?? (m1 as any)?.step1Score ?? '-',
-      m1?.step2?.score ?? (m1 as any)?.step2Score ?? '-',
-      m1?.step3?.score ?? (m1 as any)?.step3Score ?? '-',
-      m1?.step4?.score ?? (m1 as any)?.step4Score ?? '-',
-      m1?.totalScore ?? '-',
-      // M2
-      m2?.step1?.score ?? (m2 as any)?.step1Score ?? '-',
-      m2?.step2?.score ?? (m2 as any)?.step2Score ?? '-',
-      m2?.step3?.score ?? (m2 as any)?.step3Score ?? '-',
-      m2?.step4?.score ?? (m2 as any)?.step4Score ?? '-',
-      m2?.totalScore ?? '-',
-      // M3
-      m3?.step1?.score ?? (m3 as any)?.step1Score ?? '-',
-      m3?.step2?.score ?? (m3 as any)?.step2Score ?? '-',
-      m3?.step3?.score ?? (m3 as any)?.step3Score ?? '-',
-      m3?.step4?.score ?? (m3 as any)?.step4Score ?? '-',
-      m3?.totalScore ?? '-',
-      // M4
-      m4?.step1?.score ?? (m4 as any)?.step1Score ?? '-',
-      m4?.step2?.score ?? (m4 as any)?.step2Score ?? '-',
-      m4?.step3?.score ?? (m4 as any)?.step3Score ?? '-',
-      m4?.step4?.score ?? (m4 as any)?.step4Score ?? '-',
-      m4?.totalScore ?? '-',
+      ...missionScoreValues,
       // Pres
       pres?.accuracy ?? (pres as any)?.accuracyScore ?? '-',
       pres?.strategy ?? (pres as any)?.strategyScore ?? '-',
@@ -273,11 +220,9 @@ export const exportAssessmentToExcel = (
     const teamName = sub.team.teamName || 'Kelompok Belajar';
     const trackLabel = getTrackLabel(sub.track);
 
-    [1, 2, 3, 4].forEach((missionNum) => {
-      const answers =
-        sub.answers?.[missionNum] ||
-        (sub.answers as any)?.[String(missionNum)] ||
-        (sub.answers as any)?.[`misi-${missionNum}`];
+    questions.filter((question) => question.track === sub.track).forEach((question) => {
+      const missionNum = question.missionNumber;
+      const answers = sub.answers?.[question.id];
       if (!answers) return;
 
       const steps: Array<{ stepKey: 'step1' | 'step2' | 'step3' | 'step4'; stepLabel: string }> = [
@@ -291,15 +236,15 @@ export const exportAssessmentToExcel = (
         const stepAnswers = answers[stepKey];
         if (!stepAnswers || typeof stepAnswers !== 'object') return;
 
-        Object.entries(stepAnswers).forEach(([fieldId, ansVal]) => {
-          if (ansVal !== undefined && ansVal !== null && String(ansVal).trim() !== '') {
+        getQuestionAnswerRows(question, stepKey, answers).forEach(({ id: fieldId, label, answer: ansVal }) => {
+          if (ansVal.trim() !== '') {
             transkripData.push([
               teamName,
               trackLabel,
               `Kasus ${missionNum}`,
               stepLabel,
-              fieldId,
-              String(ansVal),
+              label || fieldId,
+              ansVal,
             ]);
           }
         });
@@ -409,5 +354,15 @@ export const exportAssessmentToExcel = (
   // Trigger browser download of .xlsx
   const dateStamp = new Date().toISOString().slice(0, 10);
   const fullFileName = `${fileNamePrefix}_${dateStamp}.xlsx`;
-  XLSX.writeFile(wb, fullFileName);
+  const bytes = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fullFileName;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
