@@ -240,7 +240,7 @@ export const ReflectionView: React.FC<Props> = ({ onNavigate }) => {
               value={reflectionData[item.id] || ''}
               onChange={(e) => handleChange(item.id, e.target.value)}
               placeholder={item.placeholder}
-              className="box-border h-40 min-h-[140px] max-h-[180px] w-full min-w-0 resize-y px-4 py-3 bg-[#FAF8F5] hover:bg-white focus:bg-white border border-[#D8CFC8] focus:border-[#FF913D] rounded-xl text-xs sm:text-sm font-medium text-[#2D231E] placeholder:text-[#A8988F] focus:outline-none focus:ring-2 focus:ring-[#FF913D]/30 transition-all cursor-text shadow-2xs"
+              className="box-border h-40 min-h-[140px] max-h-[180px] w-full min-w-0 resize-y px-4 py-3 bg-[#FAF8F5] hover:bg-white focus:bg-white border border-[#D8CFC8] focus:border-[#FF913D] rounded-xl text-xs sm:text-sm lg:text-base font-medium text-[#2D231E] placeholder:text-[#A8988F] focus:outline-none focus:ring-2 focus:ring-[#FF913D]/30 transition-all cursor-text shadow-2xs"
             />
           </div>
         ))}

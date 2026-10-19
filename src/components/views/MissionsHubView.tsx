@@ -32,7 +32,6 @@ export const MissionsHubView: React.FC<Props> = ({ onNavigate, onSelectMission }
     timerSeconds,
     rubricConfig,
     hasTimeExpired,
-    startMissionTimer,
   } = useAssessment();
 
   const [celebrationOpen, setCelebrationOpen] = useState(false);
@@ -94,7 +93,6 @@ export const MissionsHubView: React.FC<Props> = ({ onNavigate, onSelectMission }
 
   const handleCaseSelect = (num: number) => {
     soundManager.playClick();
-    startMissionTimer();
     onSelectMission(num);
   };
 

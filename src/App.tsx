@@ -9,6 +9,7 @@ import { TrackSelectionView } from './components/views/TrackSelectionView';
 import { TeamIdentityView } from './components/views/TeamIdentityView';
 import { MissionsHubView } from './components/views/MissionsHubView';
 import { MissionDetailView } from './components/views/MissionDetailView';
+import { CountdownView } from './components/views/CountdownView';
 import { PracticeQuestionsView } from './components/views/PracticeQuestionsView';
 import { ResultsEvaluationView } from './components/views/ResultsEvaluationView';
 import { PresentationView } from './components/views/PresentationView';
@@ -86,9 +87,9 @@ function MainApp() {
   const [hasEnteredMissionMap, setHasEnteredMissionMap] = useState(false);
 
   // Halaman yang hanya boleh dibuka siswa yang sudah memverifikasi ID Kelompok.
-  const STUDENT_SESSION_VIEWS = ['pintu', 'identitas', 'misi', 'misi-detail'];
+  const STUDENT_SESSION_VIEWS = ['pintu', 'identitas', 'misi', 'countdown', 'misi-detail'];
   // Halaman kelanjutan misi: identitas kelompok wajib lengkap lebih dulu.
-  const IDENTITY_REQUIRED_VIEWS = ['misi', 'misi-detail'];
+  const IDENTITY_REQUIRED_VIEWS = ['misi', 'countdown', 'misi-detail'];
 
   useEffect(() => {
     if (
@@ -145,7 +146,7 @@ function MainApp() {
     }
 
     // Section A2: Guard student missions behind verified Group ID
-    if (['pintu', 'identitas', 'misi', 'misi-detail'].includes(view) && !hasVerifiedGroupToken) {
+    if (['pintu', 'identitas', 'misi', 'countdown', 'misi-detail'].includes(view) && !hasVerifiedGroupToken) {
       setCurrentView('kelas');
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
@@ -184,7 +185,7 @@ function MainApp() {
       return;
     }
     setActiveMissionNumber(missionNum);
-    setCurrentView('misi-detail');
+    setCurrentView('countdown');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -272,6 +273,9 @@ function MainApp() {
             onNavigate={handleNavigate}
             onSelectMission={handleSelectMission}
           />
+        )}
+        {currentView === 'countdown' && (
+          <CountdownView missionNumber={activeMissionNumber} onNavigate={handleNavigate} />
         )}
         {currentView === 'misi-detail' && (
           <MissionDetailView

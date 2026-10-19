@@ -355,7 +355,7 @@ export const PresentationView: React.FC<Props> = ({ onNavigate }) => {
                 value={reflectionInputs.lcmLearning}
                 onChange={(e) => handleReflectionChange('lcmLearning', e.target.value)}
                 placeholder="Tuliskan pemahaman baru kelompokmu tentang bagaimana kelipatan persekutuan terkecil bekerja..."
-                className="box-border h-40 min-h-[140px] max-h-[180px] w-full min-w-0 resize-y px-4 py-3 bg-white border border-[#D8CFC8] focus:border-[#FF913D] rounded-xl text-sm text-[#2D231E] placeholder:text-[#A8988F] focus:outline-none focus:ring-2 focus:ring-[#FF913D]/30"
+                className="box-border h-40 min-h-[140px] max-h-[180px] w-full min-w-0 resize-y px-4 py-3 bg-white border border-[#D8CFC8] focus:border-[#FF913D] rounded-xl text-sm lg:text-base text-[#2D231E] placeholder:text-[#A8988F] focus:outline-none focus:ring-2 focus:ring-[#FF913D]/30"
               />
             </div>
 
@@ -368,7 +368,7 @@ export const PresentationView: React.FC<Props> = ({ onNavigate }) => {
                 value={reflectionInputs.challengingMission}
                 onChange={(e) => handleReflectionChange('challengingMission', e.target.value)}
                 placeholder="Ceritakan tantangan perhitungan atau kalender dan cara tim menyelesaikannya..."
-                className="box-border h-40 min-h-[140px] max-h-[180px] w-full min-w-0 resize-y px-4 py-3 bg-white border border-[#D8CFC8] focus:border-[#FF913D] rounded-xl text-sm text-[#2D231E] placeholder:text-[#A8988F] focus:outline-none focus:ring-2 focus:ring-[#FF913D]/30"
+                className="box-border h-40 min-h-[140px] max-h-[180px] w-full min-w-0 resize-y px-4 py-3 bg-white border border-[#D8CFC8] focus:border-[#FF913D] rounded-xl text-sm lg:text-base text-[#2D231E] placeholder:text-[#A8988F] focus:outline-none focus:ring-2 focus:ring-[#FF913D]/30"
               />
             </div>
 
@@ -522,7 +522,7 @@ export const PresentationView: React.FC<Props> = ({ onNavigate }) => {
             updatePresentation({ groupConclusion: e.target.value });
           }}
           placeholder="Tuliskan kata pembuka atau catatan yang ingin dibacakan penyaji hasil..."
-          className="box-border h-40 min-h-[140px] max-h-[180px] w-full min-w-0 resize-y px-4 py-3 bg-white border border-[#D8CFC8] rounded-xl text-sm text-[#2D231E] focus:outline-none focus:ring-2 focus:ring-[#FF913D]"
+          className="box-border h-40 min-h-[140px] max-h-[180px] w-full min-w-0 resize-y px-4 py-3 bg-white border border-[#D8CFC8] rounded-xl text-sm lg:text-base text-[#2D231E] focus:outline-none focus:ring-2 focus:ring-[#FF913D]"
         />
       </div>
 

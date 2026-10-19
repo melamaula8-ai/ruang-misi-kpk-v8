@@ -427,7 +427,7 @@ export const MissionDetailView: React.FC<Props> = ({
                       handleInputChange(activeStep, field.id, e.target.value)
                     }
                     placeholder="Tuliskan cara kamu menemukan jawabannya di sini…"
-                    className="mission-answer-textarea box-border h-auto min-h-[9.5rem] w-full min-w-0 resize-y rounded-xl border border-[#D8CFC8] bg-[#FAF8F5] px-4 py-3 text-sm font-medium leading-6 text-[#2D231E] transition-colors placeholder:text-[#8C7A70] hover:border-[#95634F] focus:border-[#FF913D] focus:bg-white focus:outline-none focus:ring-4 focus:ring-[#FF913D]/15"
+                    className="mission-answer-textarea box-border h-auto min-h-[9.5rem] w-full min-w-0 resize-y rounded-xl border border-[#D8CFC8] bg-[#FAF8F5] px-4 py-3 text-sm lg:text-base font-medium leading-6 text-[#2D231E] transition-colors placeholder:text-[#8C7A70] hover:border-[#95634F] focus:border-[#FF913D] focus:bg-white focus:outline-none focus:ring-4 focus:ring-[#FF913D]/15"
                   />
                 ) : (
                   <div className="min-w-0 space-y-1.5">
@@ -440,7 +440,7 @@ export const MissionDetailView: React.FC<Props> = ({
                         handleInputChange(activeStep, field.id, e.target.value)
                       }
                       placeholder="Tuliskan jawaban kelompok di sini..."
-                      className="box-border h-14 w-full min-w-0 px-4 bg-[#FAF8F5] focus:bg-white border border-[#D8CFC8] hover:border-[#95634F] focus:border-[#FF913D] rounded-xl text-sm font-medium text-[#2D231E] focus:outline-none transition-colors"
+                      className="box-border h-14 w-full min-w-0 px-4 bg-[#FAF8F5] focus:bg-white border border-[#D8CFC8] hover:border-[#95634F] focus:border-[#FF913D] rounded-xl text-sm lg:text-base font-medium text-[#2D231E] focus:outline-none transition-colors"
                     />
                     {field.scaffoldSuffix && (
                       <span className="block text-xs font-bold text-[#6D5A50]">

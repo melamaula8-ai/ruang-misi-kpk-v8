@@ -214,7 +214,7 @@ export const PracticeQuestionsView: React.FC<Props> = ({ onNavigate }) => {
               value={studentKpk}
               onChange={(e) => setStudentKpk(e.target.value)}
               placeholder="Tuliskan nilai KPK di sini..."
-              className="w-full px-3.5 py-2.5 bg-[#FAF8F5] focus:bg-white border border-[#D8CFC8] hover:border-[#95634F] focus:border-[#FF913D] rounded-xl text-xs sm:text-sm font-bold text-[#2D231E] focus:outline-none transition-colors"
+              className="w-full px-3.5 py-2.5 bg-[#FAF8F5] focus:bg-white border border-[#D8CFC8] hover:border-[#95634F] focus:border-[#FF913D] rounded-xl text-xs sm:text-sm lg:text-base font-bold text-[#2D231E] focus:outline-none transition-colors"
             />
           </div>
 
@@ -231,7 +231,7 @@ export const PracticeQuestionsView: React.FC<Props> = ({ onNavigate }) => {
               value={studentFinalAnswer}
               onChange={(e) => setStudentFinalAnswer(e.target.value)}
               placeholder={q.unit === 'detik' ? 'Tuliskan detik bersama di sini...' : 'Tuliskan tanggal bersama di sini...'}
-              className="w-full px-3.5 py-2.5 bg-[#FAF8F5] focus:bg-white border border-[#D8CFC8] hover:border-[#95634F] focus:border-[#FF913D] rounded-xl text-xs sm:text-sm font-bold text-[#2D231E] focus:outline-none transition-colors"
+              className="w-full px-3.5 py-2.5 bg-[#FAF8F5] focus:bg-white border border-[#D8CFC8] hover:border-[#95634F] focus:border-[#FF913D] rounded-xl text-xs sm:text-sm lg:text-base font-bold text-[#2D231E] focus:outline-none transition-colors"
             />
           </div>
         </div>

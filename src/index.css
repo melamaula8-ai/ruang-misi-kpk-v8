@@ -161,6 +161,12 @@ main > .max-w-6xl, main > .max-w-5xl, main > .teacher-dashboard-page,
 .mission-story-card p { overflow-wrap: anywhere; }
 .mission-illustration svg { max-height: 100%; }
 .mission-answer-textarea { min-height: 11rem; }
+.rocket-launch { animation: rocket-launch 1s cubic-bezier(.2,.75,.3,1) forwards; }
+@keyframes rocket-launch {
+  0% { transform: translate(-50%, 5rem) rotate(-45deg) scale(.8); opacity: 0; }
+  12% { opacity: 1; }
+  100% { transform: translate(-50%, -16rem) rotate(-45deg) scale(1.05); opacity: 0; }
+}
 .learning-card, .practice-question-card, .class-access-card,
 .mission-hub-hero, .identity-hero, .track-selection-hero { min-width: 0; }
 @media (max-width: 767px) {

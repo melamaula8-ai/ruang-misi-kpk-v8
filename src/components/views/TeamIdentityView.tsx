@@ -227,7 +227,7 @@ export const TeamIdentityView: React.FC<Props> = ({ onNavigate, validationAttemp
               placeholder="Tuliskan nama kelompok di sini..."
               aria-invalid={Boolean(validationErrors.teamName)}
               aria-describedby={validationErrors.teamName ? 'team-name-error' : undefined}
-              className={`box-border h-14 w-full min-w-0 px-4 bg-[#FAF8F5] border rounded-xl text-sm font-medium text-[#2D231E] focus:outline-none focus:ring-2 focus:ring-[#FF913D] ${
+              className={`box-border h-14 w-full min-w-0 px-4 bg-[#FAF8F5] border rounded-xl text-sm lg:text-base font-medium text-[#2D231E] focus:outline-none focus:ring-2 focus:ring-[#FF913D] ${
                 validationErrors.teamName ? 'border-red-400' : 'border-[#D8CFC8]'
               }`}
             />
@@ -255,7 +255,7 @@ export const TeamIdentityView: React.FC<Props> = ({ onNavigate, validationAttemp
               placeholder="Tuliskan nama sekolah di sini..."
               aria-invalid={Boolean(validationErrors.schoolName)}
               aria-describedby={validationErrors.schoolName ? 'school-name-error' : undefined}
-              className={`box-border h-14 w-full min-w-0 px-4 bg-[#FAF8F5] border rounded-xl text-sm font-medium text-[#2D231E] focus:outline-none focus:ring-2 focus:ring-[#FF913D] ${
+              className={`box-border h-14 w-full min-w-0 px-4 bg-[#FAF8F5] border rounded-xl text-sm lg:text-base font-medium text-[#2D231E] focus:outline-none focus:ring-2 focus:ring-[#FF913D] ${
                 validationErrors.schoolName ? 'border-red-400' : 'border-[#D8CFC8]'
               }`}
             />
@@ -328,7 +328,7 @@ export const TeamIdentityView: React.FC<Props> = ({ onNavigate, validationAttemp
                     placeholder={`Nama Anggota ${idx + 1}...`}
                     aria-invalid={Boolean(validationErrors.members[idx])}
                     aria-describedby={validationErrors.members[idx] ? `member-name-${idx}-error` : undefined}
-                    className={`box-border h-14 w-full min-w-0 px-4 bg-white border rounded-lg text-sm font-medium text-[#2D231E] focus:outline-none focus:ring-2 focus:ring-[#FF913D] ${
+                    className={`box-border h-14 w-full min-w-0 px-4 bg-white border rounded-lg text-sm lg:text-base font-medium text-[#2D231E] focus:outline-none focus:ring-2 focus:ring-[#FF913D] ${
                       validationErrors.members[idx] ? 'border-red-400' : 'border-[#D8CFC8]'
                     }`}
                   />
@@ -346,7 +346,7 @@ export const TeamIdentityView: React.FC<Props> = ({ onNavigate, validationAttemp
                     id={`member-role-${idx}`}
                     value={member.role}
                     onChange={(e) => handleMemberRoleChange(idx, e.target.value)}
-                    className="box-border h-14 w-full min-w-0 px-4 bg-white border border-[#D8CFC8] rounded-lg text-sm font-medium text-[#3E2723] focus:outline-none focus:ring-2 focus:ring-[#FF913D]"
+                    className="box-border h-14 w-full min-w-0 px-4 bg-white border border-[#D8CFC8] rounded-lg text-sm lg:text-base font-medium text-[#3E2723] focus:outline-none focus:ring-2 focus:ring-[#FF913D]"
                   >
                     {PREDEFINED_ROLES.map((role) => (
                       <option key={role} value={role}>
@@ -379,7 +379,7 @@ export const TeamIdentityView: React.FC<Props> = ({ onNavigate, validationAttemp
               setErrorMessage('');
             }}
             placeholder="Tuliskan komitmen kelompokmu..."
-            className="box-border h-40 min-h-[140px] max-h-[180px] w-full min-w-0 resize-y px-4 py-3 bg-[#FAF8F5] border border-[#D8CFC8] rounded-xl text-sm font-medium text-[#2D231E] focus:outline-none focus:ring-2 focus:ring-[#FF913D]"
+            className="box-border h-40 min-h-[140px] max-h-[180px] w-full min-w-0 resize-y px-4 py-3 bg-[#FAF8F5] border border-[#D8CFC8] rounded-xl text-sm lg:text-base font-medium text-[#2D231E] focus:outline-none focus:ring-2 focus:ring-[#FF913D]"
           />
         </div>
       </div>
