@@ -30,6 +30,7 @@ export const MissionsHubView: React.FC<Props> = ({ onNavigate, onSelectMission }
     questions,
     activeSubmission,
     timerSeconds,
+    rubricConfig,
     hasTimeExpired,
     startMissionTimer,
   } = useAssessment();
@@ -103,15 +104,15 @@ export const MissionsHubView: React.FC<Props> = ({ onNavigate, onSelectMission }
     onNavigate('refleksi');
   };
 
-  // Setelah waktu habis, kelompok tetap mengisi refleksi sebelum asesmen dikirim.
+  // Arahkan murid ke status hasil setelah timer otomatis mengirim asesmen.
   React.useEffect(() => {
-    if (hasTimeExpired && allCasesCompleted) {
+    if (hasTimeExpired) {
       const timer = setTimeout(() => {
-        onNavigate('refleksi');
+        onNavigate('evaluasi');
       }, 3500);
       return () => clearTimeout(timer);
     }
-  }, [hasTimeExpired, allCasesCompleted, onNavigate]);
+  }, [hasTimeExpired, onNavigate]);
 
   return (
     <div className="adventure-page max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-8">
@@ -125,7 +126,7 @@ export const MissionsHubView: React.FC<Props> = ({ onNavigate, onSelectMission }
           <div className="flex items-center gap-3">
             <Clock className="w-6 h-6 text-[#FF913D] shrink-0" />
             <div className="text-xs sm:text-sm">
-              <strong>Waktu pengerjaan 25 menit telah selesai.</strong> Jawaban tersimpan. Selesaikan kasus yang tersisa, isi refleksi, lalu kirim ke guru.
+              <strong>Waktu pengerjaan {rubricConfig.durationMinutes ?? 25} menit telah habis.</strong> Jawaban tersimpan dan asesmen otomatis dikirim ke guru.
             </div>
           </div>
           <button
@@ -173,7 +174,7 @@ export const MissionsHubView: React.FC<Props> = ({ onNavigate, onSelectMission }
             </div>
             <div>
               <span className="text-[10px] font-bold uppercase tracking-wider text-[#8C7A70] block">
-                Timer Pengerjaan (25 Menit):
+                Timer Pengerjaan ({rubricConfig.durationMinutes ?? 25} Menit):
               </span>
               <div
                 className={`text-2xl font-extrabold font-mono tracking-wider ${

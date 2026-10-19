@@ -1480,6 +1480,24 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
             <div className="bg-[#FAF8F5] p-4 rounded-xl border border-[#EAE3D9] space-y-3">
+              <h4 className="font-bold text-[#3E2723]">Durasi Pengerjaan</h4>
+              <label className="block font-semibold" htmlFor="assessment-duration">Waktu dalam menit (default 25 menit):</label>
+              <input
+                id="assessment-duration"
+                type="number"
+                min="1"
+                max="240"
+                step="1"
+                value={rubricConfig.durationMinutes ?? 25}
+                onChange={(e) => updateRubricConfig({
+                  ...rubricConfig,
+                  durationMinutes: Math.max(1, Math.min(240, parseInt(e.target.value, 10) || 25)),
+                })}
+                className="w-28 px-3 py-2 bg-white border border-[#D8CFC8] rounded-lg font-mono font-bold"
+              />
+              <p className="text-[11px] text-[#6D5A50]">Perubahan berlaku untuk pengerjaan berikutnya. Jika tidak diubah, timer memakai 25 menit.</p>
+            </div>
+            <div className="bg-[#FAF8F5] p-4 rounded-xl border border-[#EAE3D9] space-y-3">
               <h4 className="font-bold text-[#3E2723]">Bobot Empat Misi (20 Poin Masing-Masing)</h4>
               <div className="grid grid-cols-2 gap-3">
                 <div>

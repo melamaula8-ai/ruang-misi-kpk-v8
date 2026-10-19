@@ -202,6 +202,7 @@ export interface AssessmentSubmission {
 }
 
 export interface RubricConfig {
+  durationMinutes?: number;
   [mission: `mission${number}`]: { step1: number; step2: number; step3: number; step4: number };
   mission1: { step1: number; step2: number; step3: number; step4: number };
   mission2: { step1: number; step2: number; step3: number; step4: number };

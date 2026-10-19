@@ -177,6 +177,7 @@ const DEFAULT_REFLECTION: ReflectionData = {
 };
 
 const DEFAULT_RUBRIC: RubricConfig = {
+  durationMinutes: 25,
   mission1: { step1: 4, step2: 4, step3: 8, step4: 4 },
   mission2: { step1: 4, step2: 4, step3: 8, step4: 4 },
   mission3: { step1: 4, step2: 4, step3: 8, step4: 4 },
@@ -1100,7 +1101,7 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     if (activeSubmission.isTimerRunning && activeSubmission.targetEndTimestamp) {
       return Math.max(0, Math.round((activeSubmission.targetEndTimestamp - Date.now()) / 1000));
     }
-    return 25 * 60; // 1500 seconds default
+    return Math.max(1, rubricConfig.durationMinutes ?? 25) * 60;
   });
 
   const [isTimerActive, setIsTimerActive] = useState<boolean>(() => {
@@ -1110,6 +1111,9 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [hasTimeExpired, setHasTimeExpired] = useState<boolean>(() => {
     return activeSubmission.status === 'time_expired_pending_review';
   });
+  const assessmentDurationMinutes = Number.isFinite(rubricConfig.durationMinutes) && (rubricConfig.durationMinutes ?? 0) > 0
+    ? Math.floor(rubricConfig.durationMinutes!)
+    : 25;
 
   // Calculate remaining seconds directly from source of truth targetEndTimestamp
   useEffect(() => {
@@ -1123,7 +1127,7 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         setTimerSeconds(0);
       } else {
         setHasTimeExpired(false);
-        setTimerSeconds(25 * 60);
+        setTimerSeconds(assessmentDurationMinutes * 60);
       }
       return;
     }
@@ -1136,11 +1140,25 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setTimerSeconds(remaining);
 
       if (remaining <= 0) {
-        // Waktu habis menghentikan timer; pengiriman menunggu refleksi murid.
+        // Waktu habis otomatis mengirim asesmen meskipun belum selesai.
         setIsTimerActive(false);
         setHasTimeExpired(true);
         setAllSubmissions((prev) =>
-          prev.map((sub) => sub.id === activeSubmission.id ? { ...sub, isTimerRunning: false } : sub)
+          prev.map((sub) => {
+            if (sub.id !== activeSubmission.id || sub.status === 'submitted_pending_review' || sub.status === 'reviewed' || sub.status === 'results_published') return sub;
+            const now = new Date().toISOString();
+            return {
+              ...sub,
+              status: 'time_expired_pending_review',
+              isTimerRunning: false,
+              submittedAt: now,
+              history: [...sub.history, {
+                timestamp: now,
+                action: 'Waktu pengerjaan habis — asesmen otomatis dikirim kepada guru',
+                actor: 'Sistem Timer Otomatis',
+              }],
+            };
+          })
         );
       }
     };
@@ -1148,7 +1166,7 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     checkTimer();
     const interval = setInterval(checkTimer, 1000);
     return () => clearInterval(interval);
-  }, [activeSubmission.id, activeSubmission.isTimerRunning, activeSubmission.targetEndTimestamp]);
+  }, [activeSubmission.id, activeSubmission.isTimerRunning, activeSubmission.targetEndTimestamp, assessmentDurationMinutes]);
 
   // B1: Memulai Timer — HANYA saat siswa mulai mengerjakan Track 1 / Kasus Investigasi
   const startMissionTimer = () => {
@@ -1156,7 +1174,7 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       return; // Already running
     }
     const startedAt = Date.now();
-    const targetEnd = startedAt + 25 * 60 * 1000; // 25 Menit (1500 detik)
+    const targetEnd = startedAt + assessmentDurationMinutes * 60 * 1000;
 
     setAllSubmissions((prev) =>
       prev.map((sub) => {
@@ -1170,7 +1188,7 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             ...sub.history,
             {
               timestamp: new Date().toISOString(),
-              action: 'Timer 25 menit investigasi resmi dimulai oleh murid',
+              action: `Timer ${assessmentDurationMinutes} menit resmi dimulai oleh murid`,
               actor: sub.team.teamName || 'Kelompok Murid',
             },
           ],
@@ -1193,7 +1211,7 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         };
       })
     );
-    setTimerSeconds(25 * 60);
+    setTimerSeconds(assessmentDurationMinutes * 60);
     setIsTimerActive(false);
     setHasTimeExpired(false);
   };
@@ -1592,7 +1610,7 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             ...sub.history,
             {
               timestamp: now,
-              action: `Guru memberikan izin pengerjaan ulang (Versi ${newVersion}). Timer 25 menit siap dimulai ulang.`,
+              action: `Guru memberikan izin pengerjaan ulang (Versi ${newVersion}). Timer ${rubricConfig.durationMinutes ?? 25} menit siap dimulai ulang.`,
               actor: teacherName,
             },
           ],
