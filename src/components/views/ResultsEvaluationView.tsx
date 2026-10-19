@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   Clock,
   Printer,
@@ -8,15 +8,11 @@ import {
   Award,
   ArrowLeft,
   Calendar,
-  Volume2,
-  VolumeX,
-  Play,
   RotateCcw,
   Sparkles,
 } from 'lucide-react';
 import { useAssessment } from '../../context/AssessmentContext';
 import { getQuestionAnswerRows } from '../../utils/questionAnswerRows';
-import { audioCelebration } from '../../utils/audioCelebration';
 
 interface Props {
   onNavigate: (view: string) => void;
@@ -34,24 +30,7 @@ export const ResultsEvaluationView: React.FC<Props> = ({ onNavigate }) => {
   const isReopened = activeSubmission.status === 'reopened';
   const isInProgress = activeSubmission.status === 'in_progress';
 
-  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
-  const [isAudioMuted, setIsAudioMuted] = useState(audioCelebration.getIsMuted());
-
-  // Section E: Ucapan Apresiasi Pendek & Hangat
   const appreciationQuote = 'Kerja bagus, tim! Kesalahan membantu kita belajar dan terus berkembang!';
-
-  const handlePlayAudio = () => {
-    audioCelebration.playCelebration(
-      appreciationQuote,
-      () => setIsPlayingAudio(true),
-      () => setIsPlayingAudio(false)
-    );
-  };
-
-  const handleToggleMute = () => {
-    const nextMuted = audioCelebration.toggleMute();
-    setIsAudioMuted(nextMuted);
-  };
 
   // Questions of current track
   const currentQuestions = questions.filter((q) => q.track === activeSubmission.track);
@@ -171,11 +150,11 @@ export const ResultsEvaluationView: React.FC<Props> = ({ onNavigate }) => {
         </div>
       )}
 
-      {/* Case 2: Status PUBLISHED (Full Results & Review Display + Section E Audio Apresiasi) */}
+      {/* Case 2: Status PUBLISHED (Full Results & Review Display) */}
       {isPublished && (
         <div className="space-y-8">
-          {/* Section E: Ucapan Apresiasi Hangat & Audio Player (~5 Detik) */}
-          <div className="bg-white border-2 border-[#C5E68A] rounded-2xl p-6 sm:p-7 shadow-xs space-y-4">
+          {/* Ucapan Apresiasi */}
+          <div className="bg-white border-2 border-[#C5E68A] rounded-2xl p-6 sm:p-7 shadow-xs">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div className="space-y-1">
                 <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#4A671E]">
@@ -187,41 +166,7 @@ export const ResultsEvaluationView: React.FC<Props> = ({ onNavigate }) => {
                 </h3>
               </div>
 
-              {/* Audio Controls */}
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={handlePlayAudio}
-                  disabled={isAudioMuted}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs ${
-                    isPlayingAudio
-                      ? 'bg-[#4A671E] text-white animate-pulse'
-                      : 'bg-[#C5E68A] hover:bg-[#A8D468] text-[#2D231E]'
-                  } disabled:opacity-40`}
-                  title="Dengarkan Suara Apresiasi Bahasa Indonesia (~5 Detik)"
-                >
-                  <Play className="w-3.5 h-3.5 fill-current" />
-                  <span>{isPlayingAudio ? 'Memutar Suara...' : 'Putar Audio Apresiasi'}</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleToggleMute}
-                  className="p-2.5 rounded-xl border border-[#D8CFC8] bg-[#FAF8F5] hover:bg-neutral-100 text-[#6D5A50] hover:text-[#3E2723] transition-colors cursor-pointer"
-                  title={isAudioMuted ? 'Nyalakan Suara Audio' : 'Matikan Suara Audio'}
-                  aria-label={isAudioMuted ? 'Nyalakan Suara Audio' : 'Matikan Suara Audio'}
-                >
-                  {isAudioMuted ? (
-                    <VolumeX className="w-4 h-4 text-neutral-400" />
-                  ) : (
-                    <Volume2 className="w-4 h-4 text-[#4A671E]" />
-                  )}
-                </button>
-              </div>
-            </div>
-            <div className="text-[11px] text-[#8C7A70] flex items-center gap-2">
-              <span>*Audio berdurasi ~5 detik dirancang memberi semangat dan penghargaan atas usaha kolaborasi tim.</span>
-            </div>
+          </div>
           </div>
           {/* Score Header Card */}
           <div className="bg-white border border-[#EAE3D9] rounded-2xl p-6 sm:p-8 shadow-xs">
