@@ -80,6 +80,21 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
   // Currently selected submission for grading
   const selectedSubmission =
     allSubmissions.find((s) => s.id === activeSubmissionId) || allSubmissions[0];
+  const trackOrder: LearningTrack[] = ['penjelajah', 'pengembang', 'inovator'];
+  const trackLabels: Record<LearningTrack, string> = {
+    penjelajah: 'Pintu Penjelajah',
+    pengembang: 'Pintu Pengembang',
+    inovator: 'Pintu Inovator',
+  };
+  const groupedSubmissions = Array.from(
+    allSubmissions.reduce((groups, submission) => {
+      const key = submission.groupCode?.trim().toUpperCase() || submission.groupId || submission.id;
+      const group = groups.get(key) || [];
+      group.push(submission);
+      groups.set(key, group);
+      return groups;
+    }, new Map<string, typeof allSubmissions>()).values()
+  );
   const reviewQuestions = questions
     .filter((question) => question.track === selectedSubmission?.track)
     .slice()
@@ -575,7 +590,7 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
             <div className="bg-white border border-[#EAE3D9] p-5 rounded-2xl space-y-1 shadow-xs">
               <span className="text-xs font-semibold text-[#8C7A70]">Total Kelompok Terdaftar</span>
               <div className="text-3xl font-extrabold text-[#3E2723] font-mono">
-                {allSubmissions.length}
+                {groupedSubmissions.length}
               </div>
             </div>
 
@@ -643,52 +658,68 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#EAE3D9]">
-                  {allSubmissions.map((sub) => {
-                    const isSelected = sub.id === activeSubmissionId;
+                  {groupedSubmissions.map((group) => {
+                    const representative = group[0];
                     return (
                       <tr
-                        key={sub.id}
-                        className={`hover:bg-[#FAF8F5] transition-colors ${
-                          isSelected ? 'bg-[#FFE082]/15 font-semibold' : ''
-                        }`}
+                        key={representative.groupCode || representative.groupId || representative.id}
+                        className="hover:bg-[#FAF8F5] transition-colors"
                       >
                         <td className="py-3 px-3">
                           <span className="font-bold text-[#3E2723]">
-                            {sub.team.teamName || '(Belum diberi nama)'}
+                            {representative.team.teamName || '(Belum diberi nama)'}
                           </span>
                           <span className="text-[10px] text-[#8C7A70] block">
-                            {sub.team.schoolName || 'SD/MI'}
+                            {representative.team.schoolName || 'SD/MI'}
+                          </span>
+                          <span className="mt-1 block font-mono text-[10px] text-[#8C7A70]">
+                            ID {representative.groupCode || representative.groupId || '—'}
                           </span>
                         </td>
-                        <td className="py-3 px-3 uppercase text-[#95634F] font-bold">
-                          {sub.track}
+                        <td className="min-w-44 py-3 px-3">
+                          {trackOrder.map((track) => (
+                            <div key={track} className="py-1 text-[11px] font-bold text-[#95634F]">
+                              {trackLabels[track]}
+                            </div>
+                          ))}
                         </td>
                         <td className="py-3 px-3">
-                          <StatusBadge status={sub.status} />
+                          {trackOrder.map((track) => {
+                            const submission = group.find((item) => item.track === track);
+                            const submitted = submission && ['submitted_pending_review', 'time_expired_pending_review', 'reviewed', 'results_published'].includes(submission.status);
+                            return (
+                              <div key={track} className="flex min-h-8 items-center py-1">
+                                {submission ? submitted ? (
+                                  <span className="rounded-full bg-[#EAF5D7] px-2.5 py-1 text-[10px] font-bold text-[#4A671E]">Sudah dikerjakan</span>
+                                ) : (
+                                  <span className="rounded-full bg-[#FFF3D7] px-2.5 py-1 text-[10px] font-bold text-[#8A5B16]">Sedang dikerjakan</span>
+                                ) : (
+                                  <span className="rounded-full bg-[#F3F0EC] px-2.5 py-1 text-[10px] font-bold text-[#77685E]">Tunggu murid mengerjakan</span>
+                                )}
+                              </div>
+                            );
+                          })}
                         </td>
-                        <td className="py-3 px-3 font-mono text-[#6D5A50]">
-                          {sub.submittedAt
-                            ? new Date(sub.submittedAt).toLocaleDateString('id-ID', {
-                                day: 'numeric',
-                                month: 'short',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })
-                            : '-'}
+                        <td className="py-3 px-3 font-mono text-[10px] text-[#6D5A50]">
+                          {trackOrder.map((track) => {
+                            const submittedAt = group.find((item) => item.track === track)?.submittedAt;
+                            return <div key={track} className="min-h-8 py-1">{submittedAt ? new Date(submittedAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}</div>;
+                          })}
                         </td>
-                        <td className="py-3 px-3 font-mono font-bold text-[#3E2723]">
-                          {sub.evaluation?.totalScore ?? '-'}
+                        <td className="py-3 px-3 font-mono text-[11px] font-bold text-[#3E2723]">
+                          {trackOrder.map((track) => <div key={track} className="min-h-8 py-1">{group.find((item) => item.track === track)?.evaluation?.totalScore ?? '—'}</div>)}
                         </td>
                         <td className="py-3 px-3 text-right">
-                          <button
-                            onClick={() => {
-                              switchActiveSubmission(sub.id);
-                              setActiveTab('penilaian');
-                            }}
-                            className="px-3 py-1 bg-[#95634F] hover:bg-[#3E2723] text-white text-[11px] font-bold rounded-lg transition-colors cursor-pointer"
-                          >
-                            Buka Penilaian
-                          </button>
+                          {trackOrder.map((track) => {
+                            const submission = group.find((item) => item.track === track);
+                            const submitted = submission && ['submitted_pending_review', 'time_expired_pending_review', 'reviewed', 'results_published'].includes(submission.status);
+                            return <div key={track} className="flex min-h-8 items-center justify-end py-1">
+                              {submission && <button
+                                onClick={() => { switchActiveSubmission(submission.id); setActiveTab('penilaian'); }}
+                                className={`rounded-lg px-3 py-1 text-[10px] font-bold transition-colors ${submitted ? 'bg-[#95634F] text-white hover:bg-[#3E2723]' : 'border border-[#D8CFC8] bg-white text-[#6D5A50] hover:bg-[#FAF8F5]'}`}
+                              >{submitted ? 'Buka Penilaian' : 'Pantau Jawaban'}</button>}
+                            </div>;
+                          })}
                         </td>
                       </tr>
                     );
