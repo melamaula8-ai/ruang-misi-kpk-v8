@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import {
   Clock,
   Printer,
@@ -439,44 +439,6 @@ export const ResultsEvaluationView: React.FC<Props> = ({ onNavigate }) => {
             })}
           </div>
 
-          {/* Presentation Evaluation Summary */}
-          <div className="bg-white border border-[#EAE3D9] rounded-2xl p-6 sm:p-8 space-y-4 shadow-xs">
-            <div className="flex items-center justify-between border-b border-[#EAE3D9] pb-3">
-              <h3 className="text-lg font-bold text-[#3E2723]">
-                Evaluasi Presentasi & Kolaborasi Kelompok
-              </h3>
-              <div className="font-mono text-base font-bold text-[#3E2723] bg-[#FAF8F5] px-2.5 py-0.5 border border-[#EAE3D9] rounded">
-                {evaluation?.presentation?.totalScore ?? 18} / 20
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-              <div className="bg-[#FAF8F5] p-3 rounded-xl border border-[#EAE3D9]">
-                <span className="text-[#8C7A70] block">Ketepatan Solusi:</span>
-                <span className="font-bold text-sm text-[#3E2723]">
-                  {evaluation?.presentation?.accuracy ?? 8} / 8 Poin
-                </span>
-              </div>
-              <div className="bg-[#FAF8F5] p-3 rounded-xl border border-[#EAE3D9]">
-                <span className="text-[#8C7A70] block">Kejelasan Strategi & Alasan:</span>
-                <span className="font-bold text-sm text-[#3E2723]">
-                  {evaluation?.presentation?.strategy ?? 5} / 6 Poin
-                </span>
-              </div>
-              <div className="bg-[#FAF8F5] p-3 rounded-xl border border-[#EAE3D9]">
-                <span className="text-[#8C7A70] block">Penyampaian & Kerja Sama:</span>
-                <span className="font-bold text-sm text-[#3E2723]">
-                  {evaluation?.presentation?.collaboration ?? 5} / 6 Poin
-                </span>
-              </div>
-            </div>
-
-            {evaluation?.presentation?.comments && (
-              <p className="text-xs text-[#5D4E46] bg-[#FAF8F5] p-3 rounded-xl border border-[#EAE3D9] italic">
-                Catatan Guru: “{evaluation.presentation.comments}”
-              </p>
-            )}
-          </div>
         </div>
       )}
 

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+﻿import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import {
   LearningTrack,
   AssessmentSubmission,
@@ -1115,7 +1115,10 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   useEffect(() => {
     if (!activeSubmission.isTimerRunning || !activeSubmission.targetEndTimestamp) {
       setIsTimerActive(false);
-      if (activeSubmission.status === 'time_expired_pending_review') {
+      if (
+        activeSubmission.status === 'time_expired_pending_review' ||
+        Boolean(activeSubmission.targetEndTimestamp && activeSubmission.targetEndTimestamp <= Date.now())
+      ) {
         setHasTimeExpired(true);
         setTimerSeconds(0);
       } else {
@@ -1133,36 +1136,11 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setTimerSeconds(remaining);
 
       if (remaining <= 0) {
-        // B3: Waktu Habis — Kunci, Simpan, dan Kirim Otomatis
+        // Waktu habis menghentikan timer; pengiriman menunggu refleksi murid.
         setIsTimerActive(false);
         setHasTimeExpired(true);
-
-        const now = new Date().toISOString();
         setAllSubmissions((prev) =>
-          prev.map((sub) => {
-            if (sub.id !== activeSubmission.id) return sub;
-            if (
-              sub.status === 'submitted_pending_review' ||
-              sub.status === 'time_expired_pending_review' ||
-              sub.status === 'results_published'
-            ) {
-              return sub;
-            }
-            return {
-              ...sub,
-              status: 'time_expired_pending_review',
-              isTimerRunning: false,
-              submittedAt: now,
-              history: [
-                ...sub.history,
-                {
-                  timestamp: now,
-                  action: 'Waktu 25 menit habis — jawaban otomatis dikunci dan dikirim ke guru',
-                  actor: 'Sistem Timer Otomatis',
-                },
-              ],
-            };
-          })
+          prev.map((sub) => sub.id === activeSubmission.id ? { ...sub, isTimerRunning: false } : sub)
         );
       }
     };
@@ -1282,7 +1260,6 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     // Prevent edits if submission is locked
     if (
       activeSubmission.status === 'submitted_pending_review' ||
-      activeSubmission.status === 'time_expired_pending_review' ||
       activeSubmission.status === 'results_published'
     ) {
       return;
@@ -1343,8 +1320,35 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   };
 
   const submitAssessment = () => {
+    if (activeSubmission.status === 'submitted_pending_review' || activeSubmission.status === 'reviewed' || activeSubmission.status === 'results_published') {
+      return { success: false, message: 'Asesmen kelompok ini sudah dikirim ke guru.' };
+    }
     if (!activeSubmission.team.teamName.trim()) {
       return { success: false, message: 'Harap lengkapi nama kelompok pada Identitas Tim terlebih dahulu.' };
+    }
+
+    const trackQuestions = questions.filter((question) => question.track === activeSubmission.track);
+    const allCasesCompleted = trackQuestions.length > 0 && trackQuestions.every((question) => {
+      const answers = activeSubmission.answers[question.id];
+      const steps = [
+        ['step1', question.step1Fields], ['step2', question.step2Fields],
+        ['step3', question.step3Fields], ['step4', question.step4Fields],
+      ] as const;
+      const totalFields = steps.reduce((count, [, fields]) => count + fields.length, 0);
+      const filledCount = steps.reduce((count, [step, fields]) => count + fields.filter((field) => Boolean(answers?.[step]?.[field.id]?.trim())).length, 0);
+      return totalFields > 0 && (
+        filledCount >= Math.max(3, totalFields * 0.7) ||
+        (Boolean(answers?.step3 && Object.values(answers.step3).some((value) => value.trim())) &&
+          Boolean(answers?.step4 && Object.values(answers.step4).some((value) => value.trim())))
+      );
+    });
+    if (!allCasesCompleted) {
+      return { success: false, message: 'Selesaikan empat kasus terlebih dahulu sebelum mengirim asesmen.' };
+    }
+
+    const requiredReflection = ['lcmLearning', 'challengingMission', 'easyPart', 'confusingPart'] as const;
+    if (!requiredReflection.every((field) => activeSubmission.reflection?.[field]?.trim())) {
+      return { success: false, message: 'Lengkapi empat pertanyaan refleksi sebelum mengirim asesmen.' };
     }
 
     const now = new Date().toISOString();

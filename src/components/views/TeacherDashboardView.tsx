@@ -128,23 +128,10 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
     >
   >(initialMissionScores);
 
-  const [presentationScore, setPresentationScore] = useState({
-    accuracy: selectedSubmission?.evaluation?.presentation?.accuracy ?? 0,
-    strategy: selectedSubmission?.evaluation?.presentation?.strategy ?? 0,
-    collaboration: selectedSubmission?.evaluation?.presentation?.collaboration ?? 0,
-    comments: selectedSubmission?.evaluation?.presentation?.comments ?? '',
-  });
-
   const [generalFeedback, setGeneralFeedback] = useState(selectedSubmission?.evaluation?.generalFeedback ?? '');
   React.useEffect(() => {
     setMissionScores(initialMissionScores());
     setEditingMissionNum(reviewQuestions[0]?.missionNumber ?? 1);
-    setPresentationScore({
-      accuracy: selectedSubmission?.evaluation?.presentation?.accuracy ?? 0,
-      strategy: selectedSubmission?.evaluation?.presentation?.strategy ?? 0,
-      collaboration: selectedSubmission?.evaluation?.presentation?.collaboration ?? 0,
-      comments: selectedSubmission?.evaluation?.presentation?.comments ?? '',
-    });
     setGeneralFeedback(selectedSubmission?.evaluation?.generalFeedback ?? '');
   }, [selectedSubmission?.id]);
 
@@ -223,13 +210,7 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
     const score = scoreForMission(question.missionNumber);
     return sum + score.step1 + score.step2 + score.step3 + score.step4;
   }, 0);
-  const presentationRubric = rubricConfig.presentation;
-  const maxPresentationScore = presentationRubric.accuracy + presentationRubric.strategy + presentationRubric.collaboration;
-  const rawPresentationScore = presentationScore.accuracy + presentationScore.strategy + presentationScore.collaboration;
-  const totalScoreCalc = Math.round(
-    (maxCaseScore ? (rawCaseScore / maxCaseScore) * 80 : 0) +
-    (maxPresentationScore ? (rawPresentationScore / maxPresentationScore) * 20 : 0)
-  );
+  const totalScoreCalc = Math.round(maxCaseScore ? (rawCaseScore / maxCaseScore) * 100 : 0);
 
   const buildEvaluation = (): FullEvaluation => {
     const missions = Object.fromEntries(reviewQuestions.map((question) => {
@@ -245,13 +226,8 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
     }));
     return {
       missions,
-      presentation: {
-        accuracy: presentationScore.accuracy,
-        strategy: presentationScore.strategy,
-        collaboration: presentationScore.collaboration,
-        totalScore: Math.round(maxPresentationScore ? (rawPresentationScore / maxPresentationScore) * 20 : 0),
-        comments: presentationScore.comments,
-      },
+      // Kompatibilitas data lama: presentasi/refleksi bukan komponen nilai.
+      presentation: { accuracy: 0, strategy: 0, collaboration: 0, totalScore: 0, comments: '' },
       totalScore: totalScoreCalc,
       generalFeedback,
       practiceRecommendations: [],
@@ -1010,13 +986,13 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
           {/* Presentation & Reflection Scoring */}
           <div className="bg-white border border-[#EAE3D9] rounded-2xl p-6 sm:p-8 space-y-5 shadow-xs">
             <h3 className="text-base font-bold text-[#3E2723] border-b border-[#EAE3D9] pb-3">
-              Peninjauan Refleksi Murid & Penilaian Presentasi
+              Refleksi Murid (Tidak Masuk Penilaian)
             </h3>
 
             {/* Reflection Answers Display */}
             <div className="p-4 bg-[#FAF8F5] border border-[#EAE3D9] rounded-xl space-y-3">
               <span className="text-xs font-bold text-[#95634F] uppercase tracking-wider block">
-                Jawaban Refleksi Kelompok:
+                Jawaban Refleksi Kelompok — hanya sebagai catatan belajar:
               </span>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                 <div className="bg-white p-3 rounded-lg border border-[#E8DFD8] space-y-1">
@@ -1044,73 +1020,6 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
                   </p>
                 </div>
               </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs pt-1">
-              <div className="space-y-1">
-                <label className="font-bold text-[#3E2723] block">Ketepatan Solusi (0-8):</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="8"
-                  value={presentationScore.accuracy}
-                  onChange={(e) =>
-                    setPresentationScore({
-                      ...presentationScore,
-                      accuracy: parseInt(e.target.value, 10) || 0,
-                    })
-                  }
-                  className="w-full px-3 py-2 bg-[#FAF8F5] border border-[#D8CFC8] rounded-xl font-mono font-bold"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-bold text-[#3E2723] block">Kejelasan Strategi (0-6):</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="6"
-                  value={presentationScore.strategy}
-                  onChange={(e) =>
-                    setPresentationScore({
-                      ...presentationScore,
-                      strategy: parseInt(e.target.value, 10) || 0,
-                    })
-                  }
-                  className="w-full px-3 py-2 bg-[#FAF8F5] border border-[#D8CFC8] rounded-xl font-mono font-bold"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-bold text-[#3E2723] block">Kerja Sama Tim (0-6):</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="6"
-                  value={presentationScore.collaboration}
-                  onChange={(e) =>
-                    setPresentationScore({
-                      ...presentationScore,
-                      collaboration: parseInt(e.target.value, 10) || 0,
-                    })
-                  }
-                  className="w-full px-3 py-2 bg-[#FAF8F5] border border-[#D8CFC8] rounded-xl font-mono font-bold"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1.5 pt-2">
-              <label className="text-xs font-bold text-[#3E2723] block">
-                Catatan Presentasi:
-              </label>
-              <input
-                type="text"
-                value={presentationScore.comments}
-                onChange={(e) =>
-                  setPresentationScore({ ...presentationScore, comments: e.target.value })
-                }
-                className="w-full px-3 py-2 bg-[#FAF8F5] border border-[#D8CFC8] rounded-xl text-xs font-medium text-[#2D231E]"
-              />
             </div>
 
             <div className="space-y-1.5 pt-2">
@@ -1565,7 +1474,7 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
               Pengaturan Bobot Rubrik Nilai (Total Maksimal 100 Poin)
             </h3>
             <p className="text-xs text-[#6D5A50] mt-0.5">
-              Standar: Misi 1–4 masing-masing 20 poin (Tahap 1: 4, Tahap 2: 4, Tahap 3: 8, Tahap 4: 4) dan Presentasi 20 poin.
+              Nilai akhir dihitung dari jawaban empat kasus dan dinormalisasi ke skala 100. Refleksi tidak dinilai.
             </p>
           </div>
 
@@ -1632,53 +1541,6 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
               </div>
             </div>
 
-            <div className="bg-[#FAF8F5] p-4 rounded-xl border border-[#EAE3D9] space-y-3">
-              <h4 className="font-bold text-[#3E2723]">Bobot Presentasi (20 Poin)</h4>
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <span>Ketepatan Solusi (KPK & Tanggal):</span>
-                  <input
-                    type="number"
-                    value={rubricConfig.presentation.accuracy}
-                    onChange={(e) =>
-                      updateRubricConfig({
-                        ...rubricConfig,
-                        presentation: { ...rubricConfig.presentation, accuracy: parseInt(e.target.value, 10) || 0 },
-                      })
-                    }
-                    className="w-16 px-2 py-1 bg-white border border-[#D8CFC8] rounded font-mono font-bold text-center"
-                  />
-                </div>
-                <div className="flex justify-between items-center">
-                  <span>Kejelasan Strategi & Alasan:</span>
-                  <input
-                    type="number"
-                    value={rubricConfig.presentation.strategy}
-                    onChange={(e) =>
-                      updateRubricConfig({
-                        ...rubricConfig,
-                        presentation: { ...rubricConfig.presentation, strategy: parseInt(e.target.value, 10) || 0 },
-                      })
-                    }
-                    className="w-16 px-2 py-1 bg-white border border-[#D8CFC8] rounded font-mono font-bold text-center"
-                  />
-                </div>
-                <div className="flex justify-between items-center">
-                  <span>Penyampaian & Kerja Sama:</span>
-                  <input
-                    type="number"
-                    value={rubricConfig.presentation.collaboration}
-                    onChange={(e) =>
-                      updateRubricConfig({
-                        ...rubricConfig,
-                        presentation: { ...rubricConfig.presentation, collaboration: parseInt(e.target.value, 10) || 0 },
-                      })
-                    }
-                    className="w-16 px-2 py-1 bg-white border border-[#D8CFC8] rounded font-mono font-bold text-center"
-                  />
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       )}
@@ -1733,7 +1595,6 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
                   <th className="py-2.5 px-3">M2 (20)</th>
                   <th className="py-2.5 px-3">M3 (20)</th>
                   <th className="py-2.5 px-3">M4 (20)</th>
-                  <th className="py-2.5 px-3">Presentasi (20)</th>
                   <th className="py-2.5 px-3 font-bold">Total (100)</th>
                 </tr>
               </thead>
@@ -1755,7 +1616,6 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
                       <td className="py-3 px-3 font-mono">{ev?.missions?.[2]?.totalScore ?? '-'}</td>
                       <td className="py-3 px-3 font-mono">{ev?.missions?.[3]?.totalScore ?? '-'}</td>
                       <td className="py-3 px-3 font-mono">{ev?.missions?.[4]?.totalScore ?? '-'}</td>
-                      <td className="py-3 px-3 font-mono">{ev?.presentation?.totalScore ?? '-'}</td>
                       <td className="py-3 px-3 font-mono font-extrabold text-[#3E2723]">
                         {ev?.totalScore ?? '-'}
                       </td>

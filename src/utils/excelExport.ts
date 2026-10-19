@@ -85,7 +85,6 @@ export const exportAssessmentToExcel = (
       'Anggota Tim',
       'Status Asesmen',
       ...Array.from({ length: Math.max(0, ...submissions.map((sub) => questions.filter((question) => question.track === sub.track).length)) }, (_, index) => `Kasus ${index + 1}`),
-      'Presentasi Kelompok',
       'Total Nilai (100)',
       'Predikat Capaian',
       'Catatan & Umpan Balik Guru',
@@ -101,7 +100,6 @@ export const exportAssessmentToExcel = (
 
     // Protect unconfirmed scores: Only export final scores if officially published
     const missionScores = questions.filter((question) => question.track === sub.track).sort((a, b) => a.missionNumber - b.missionNumber).map((question) => (isPublished || isDraftReview ? (ev?.missions?.[question.missionNumber]?.totalScore ?? '-') : '-'));
-    const presScore = isPublished || isDraftReview ? (ev?.presentation?.totalScore ?? '-') : '-';
     const totalScore = isPublished ? (ev?.totalScore ?? '-') : isDraftReview ? `[Draf: ${ev?.totalScore ?? '-'}]` : '-';
     const predikat = isPublished && typeof ev?.totalScore === 'number'
       ? getPredikatScore(ev.totalScore)
@@ -117,7 +115,6 @@ export const exportAssessmentToExcel = (
       members || '-',
       getStatusLabel(sub.status),
       ...missionScores,
-      presScore,
       totalScore,
       predikat,
       ev?.generalFeedback || '-',
@@ -139,7 +136,6 @@ export const exportAssessmentToExcel = (
     { wch: 16 }, // Kasus 2
     { wch: 16 }, // Kasus 3
     { wch: 16 }, // Kasus 4
-    { wch: 16 }, // Presentasi
     { wch: 14 }, // Total Nilai
     { wch: 22 }, // Predikat
     { wch: 45 }, // Umpan Balik Guru
@@ -153,17 +149,12 @@ export const exportAssessmentToExcel = (
   // ==========================================
   const detailPolyaData: (string | number)[][] = [
     ['RINCIAN SKOR 4 TAHAP POLYA PER KASUS MATEMATIKA'],
-    ['Skor maksimal per tahap mengikuti bobot rubrik yang ditetapkan guru | Presentasi = 20'],
+    ['Penilaian hanya berdasarkan jawaban empat kasus.'],
     [''],
     [
       'Nama Kelompok',
       'Pintu Belajar',
       ...Array.from({ length: Math.max(0, ...submissions.map((sub) => questions.filter((question) => question.track === sub.track).length)) }, (_, index) => [`K${index + 1}: T1 (Memahami)`, `K${index + 1}: T2 (Rencana)`, `K${index + 1}: T3 (Selesai)`, `K${index + 1}: T4 (Periksa)`, `K${index + 1}: Subtotal`]).flat(),
-      // Presentasi
-      'Pres: Ketepatan (8)',
-      'Pres: Strategi (6)',
-      'Pres: Kolaborasi (6)',
-      'Pres: Subtotal (20)',
       // Total
       'TOTAL SKOR AKHIR (100)',
     ],
@@ -175,17 +166,11 @@ export const exportAssessmentToExcel = (
       const mission = ev?.missions?.[question.missionNumber];
       return [mission?.step1?.score ?? (mission as any)?.step1Score ?? '-', mission?.step2?.score ?? (mission as any)?.step2Score ?? '-', mission?.step3?.score ?? (mission as any)?.step3Score ?? '-', mission?.step4?.score ?? (mission as any)?.step4Score ?? '-', mission?.totalScore ?? '-'];
     });
-    const pres = ev?.presentation;
 
     detailPolyaData.push([
       sub.team.teamName || 'Kelompok Belajar',
       getTrackLabel(sub.track),
       ...missionScoreValues,
-      // Pres
-      pres?.accuracy ?? (pres as any)?.accuracyScore ?? '-',
-      pres?.strategy ?? (pres as any)?.strategyScore ?? '-',
-      pres?.collaboration ?? (pres as any)?.collaborationScore ?? '-',
-      pres?.totalScore ?? '-',
       // Total
       ev?.totalScore ?? '-',
     ]);
@@ -199,7 +184,6 @@ export const exportAssessmentToExcel = (
     { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, // K2
     { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, // K3
     { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, // K4
-    { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 16 }, // Pres
     { wch: 18 }, // Total
   ];
   XLSX.utils.book_append_sheet(wb, wsDetail, 'Rincian Tahap Polya');
@@ -335,16 +319,13 @@ export const exportAssessmentToExcel = (
   // ==========================================
   const rubrikData: (string | number)[][] = [
     ['PANDUAN RUBRIK PENILAIAN FORMATIF MATEMATIKA KPK KELAS V'],
-    ['Berdasarkan 4 Tahap Pemecahan Masalah George Polya dan Presentasi Kelompok'],
+    ['Berdasarkan jawaban empat kasus dengan 4 Tahap Pemecahan Masalah George Polya'],
     [''],
     ['Komponen Evaluasi', 'Tahap / Aspek', 'Bobot Maksimal', 'Deskripsi Capaian'],
     ['Pemecahan Masalah Soal', 'Tahap 1: Memahami Masalah', rubricConfig?.mission1?.step1 ?? 4, 'Menuliskan hal yang diketahui, ditanyakan, dan waktu awal secara lengkap & tepat.'],
     ['Pemecahan Masalah Soal', 'Tahap 2: Menyusun Rencana', rubricConfig?.mission1?.step2 ?? 4, 'Memilih strategi kelipatan persekutuan atau penandaan kalender yang sistematis.'],
     ['Pemecahan Masalah Soal', 'Tahap 3: Melaksanakan Rencana', rubricConfig?.mission1?.step3 ?? 8, 'Menemukan KPK dengan benar dan menghitung tanggal/waktu pertemuan berikutnya dengan akurat.'],
     ['Pemecahan Masalah Soal', 'Tahap 4: Memeriksa Kembali', rubricConfig?.mission1?.step4 ?? 4, 'Menguji kelipatan dan memastikan kebenaran hasil perhitungan secara matematis.'],
-    ['Presentasi Kelompok', 'Ketepatan Matematika', rubricConfig?.presentation?.accuracy ?? 8, 'Ketepatan konsep kelipatan, KPK, dan penjelasan kalender.'],
-    ['Presentasi Kelompok', 'Strategi & Kejelasan Alur', rubricConfig?.presentation?.strategy ?? 6, 'Kejelasan pemaparan langkah 1-4 secara logis dan runtut.'],
-    ['Presentasi Kelompok', 'Kolaborasi Tim', rubricConfig?.presentation?.collaboration ?? 6, 'Keterlibatan aktif anggota kelompok saat presentasi dan menjawab pertanyaan.'],
   ];
 
   const wsRubrik = XLSX.utils.aoa_to_sheet(rubrikData);

@@ -21,6 +21,8 @@ interface Props {
 export const ReflectionView: React.FC<Props> = ({ onNavigate }) => {
   const {
     activeSubmission,
+    questions,
+    currentTrack,
     updateReflection,
     submitAssessment,
   } = useAssessment();
@@ -46,6 +48,24 @@ export const ReflectionView: React.FC<Props> = ({ onNavigate }) => {
     activeSubmission.status === 'submitted_pending_review' ||
     activeSubmission.status === 'reviewed' ||
     activeSubmission.status === 'results_published';
+
+  const requiredReflectionFields = ['lcmLearning', 'challengingMission', 'easyPart', 'confusingPart'] as const;
+  const reflectionComplete = requiredReflectionFields.every((field) => reflectionData[field].trim());
+  const currentQuestions = questions.filter((question) => question.track === currentTrack);
+  const allCasesCompleted = currentQuestions.length > 0 && currentQuestions.every((question) => {
+    const answers = activeSubmission.answers[question.id];
+    const steps = [
+      ['step1', question.step1Fields], ['step2', question.step2Fields],
+      ['step3', question.step3Fields], ['step4', question.step4Fields],
+    ] as const;
+    const totalFields = steps.reduce((count, [, fields]) => count + fields.length, 0);
+    const filledCount = steps.reduce((count, [step, fields]) => count + fields.filter((field) => Boolean(answers?.[step]?.[field.id]?.trim())).length, 0);
+    return activeSubmission.status === 'results_published' || (totalFields > 0 && (
+      filledCount >= Math.max(3, totalFields * 0.7) ||
+      (Boolean(answers?.step3 && Object.values(answers.step3).some((value) => value.trim())) &&
+        Boolean(answers?.step4 && Object.values(answers.step4).some((value) => value.trim())))
+    ));
+  });
 
   // Synchronize state whenever activeSubmission changes (e.g. reload or switching group)
   useEffect(() => {
@@ -83,6 +103,7 @@ export const ReflectionView: React.FC<Props> = ({ onNavigate }) => {
   };
 
   const handleFinalSubmit = () => {
+    if (!allCasesCompleted || !reflectionComplete) return;
     soundManager.playNextStep();
     updateReflection({ ...reflectionData, completed: true });
     const result = submitAssessment();
@@ -231,12 +252,12 @@ export const ReflectionView: React.FC<Props> = ({ onNavigate }) => {
           type="button"
           onClick={() => {
             soundManager.playClick();
-            onNavigate('presentasi');
+            onNavigate('misi');
           }}
           className="flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-[#FAF8F5] text-[#3E2723] border border-[#EAE3D9] text-xs font-bold rounded-xl transition-colors cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Kembali ke Bahan Presentasi</span>
+          <span>Kembali ke Kasus</span>
         </button>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -258,10 +279,12 @@ export const ReflectionView: React.FC<Props> = ({ onNavigate }) => {
               soundManager.playClick();
               setSubmitModalOpen(true);
             }}
-            className="flex items-center gap-2 px-6 py-2.5 bg-[#FF913D] hover:bg-[#F2822B] text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
+            className="flex items-center gap-2 px-6 py-2.5 bg-[#FF913D] hover:bg-[#F2822B] disabled:bg-[#D8CFC8] disabled:text-[#8C7A70] disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
+            disabled={isAlreadySubmitted || !allCasesCompleted || !reflectionComplete}
+            title={!allCasesCompleted ? 'Selesaikan empat kasus terlebih dahulu.' : !reflectionComplete ? 'Isi keempat pertanyaan refleksi terlebih dahulu.' : undefined}
           >
             <Send className="w-4 h-4" />
-            <span>{isAlreadySubmitted ? 'Perbarui Berkas ke Guru' : 'Kirim Seluruh Asesmen ke Guru'}</span>
+            <span>{isAlreadySubmitted ? 'Berkas Sudah Dikirim' : 'Kirim Asesmen ke Guru'}</span>
           </button>
         </div>
       </div>
@@ -275,7 +298,7 @@ export const ReflectionView: React.FC<Props> = ({ onNavigate }) => {
                 {isAlreadySubmitted ? 'Kirim Pembaruan ke Guru?' : 'Kirim Seluruh Asesmen ke Guru?'}
               </h3>
               <p className="text-xs text-[#5D4E46] leading-relaxed">
-                Pastikan kelompok <strong>{activeSubmission.team?.teamName || 'Tim'}</strong> telah memeriksa identitas kelompok, jawaban 4 misi KPK, bahan presentasi, dan isian refleksi. Data akan dikirim ke dasbor guru untuk dikoreksi.
+                Pastikan kelompok <strong>{activeSubmission.team?.teamName || 'Tim'}</strong> telah menyelesaikan empat kasus dan menjawab seluruh pertanyaan refleksi. Nilai hanya dihitung dari jawaban empat kasus. Refleksi menjadi catatan belajar dan tidak memengaruhi nilai.
               </p>
             </div>
 
@@ -310,6 +333,7 @@ export const ReflectionView: React.FC<Props> = ({ onNavigate }) => {
               <button
                 type="button"
                 onClick={handleFinalSubmit}
+                disabled={!allCasesCompleted || !reflectionComplete}
                 className="px-5 py-2 bg-[#FF913D] hover:bg-[#F2822B] text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer"
               >
                 Ya, Kirim Sekarang
