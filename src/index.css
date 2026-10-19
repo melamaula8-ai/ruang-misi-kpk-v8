@@ -164,8 +164,13 @@ main > .max-w-6xl, main > .max-w-5xl, main > .teacher-dashboard-page,
 .learning-card, .practice-question-card, .class-access-card,
 .mission-hub-hero, .identity-hero, .track-selection-hero { min-width: 0; }
 @media (max-width: 767px) {
+  html { font-size: 14.5px; }
+  :root { --reading-font-size: 1rem; }
+  body { font-size: var(--reading-font-size); }
   html, body, #root { width: 100%; max-width: 100%; }
   #root > * { width: 100%; max-width: 100%; }
+  main .grid { grid-auto-columns: minmax(0, 1fr); }
+  main .grid > *, main .flex > * { min-width: 0; }
   .adventure-page { padding-left: 1rem; padding-right: 1rem; padding-bottom: 2.5rem; gap: 1.25rem; }
   .adventure-page > section, .teacher-dashboard-page section { border-radius: 1.25rem; }
   .teacher-dashboard-page { padding-left: 1rem; padding-right: 1rem; }
@@ -177,6 +182,7 @@ main > .max-w-6xl, main > .max-w-5xl, main > .teacher-dashboard-page,
   table { display: block; max-width: 100%; overflow-x: auto; }
 }
 @media (max-width: 420px) {
+  html { font-size: 14px; }
   .role-landing .landing-shell { border-radius: 1.25rem; }
 }
 @media (max-width: 767px) {
