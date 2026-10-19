@@ -165,6 +165,26 @@ test('HAPUS SAAT SISWA SEDANG MENGERJAKAN: data hilang, ID tersedia, sesi lama t
   assert.equal((await call(env, 'POST', { body: { upsertSubmissions: [sub('sesi_baru', t1)] } })).status, 200);
 });
 
+test('guru dapat menghapus ID yang sedang dipakai dan mencabut sesi aktif dengan aman', async () => {
+  const env = makeEnv(); const t = await seed(env);
+  const t1 = { id: 'tok_1', code: 'KPK-1A-91' };
+  await claim(env, t1, 'sesi_aktif');
+  await call(env, 'POST', { body: { upsertSubmissions: [sub('sesi_aktif', t1, { isTimerRunning: true })] } });
+
+  const deleted = await call(env, 'POST', { token: t, body: {
+    deleteTokens: ['tok_1'],
+    deleteSubmissions: ['sesi_aktif'],
+  } });
+  assert.equal(deleted.status, 200);
+  const state = (await call(env, 'GET', { token: t })).body;
+  assert.equal(state.tokens.some((item: any) => item.id === 'tok_1'), false);
+  assert.equal(state.submissions.some((item: any) => item.id === 'sesi_aktif'), false);
+  assert.equal((await call(env, 'GET', { query: '?groupCode=KPK-1A-91&sessionId=sesi_aktif' })).body.sessionRevoked, true);
+  const late = await call(env, 'POST', { body: { upsertSubmissions: [sub('sesi_aktif', t1)] } });
+  assert.equal(late.status, 409);
+  assert.equal(late.body.code, 'SESSION_DELETED');
+});
+
 test('hapus tanpa melepas ID secara eksplisit: server tetap melepas ID yang dipegang sesi itu', async () => {
   const env = makeEnv(); const t = await seed(env);
   const t2 = { id: 'tok_2', code: 'KPK-2B-47' };

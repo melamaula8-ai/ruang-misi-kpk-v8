@@ -908,14 +908,17 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const deleteGroupToken = (id: string): { success: boolean; message: string } => {
     const token = groupTokens.find((t) => t.id === id);
     if (!token) return { success: false, message: 'ID Kelompok tidak ditemukan.' };
-    if (token.status === 'claimed') {
-      return {
-        success: false,
-        message: 'ID Kelompok sedang digunakan oleh kelompok aktif. Hapus respons kelompok terlebih dahulu.',
-      };
-    }
+    const linkedSubmission = allSubmissions.find((submission) =>
+      submission.id === token.claimedBySubmissionId ||
+      submission.groupId === token.id ||
+      submission.groupCode?.toUpperCase() === token.code.toUpperCase()
+    );
+    if (linkedSubmission) removeSubmissionRecord(linkedSubmission.id, true);
     setGroupTokens((prev) => prev.filter((t) => t.id !== id));
-    return { success: true, message: `ID Kelompok ${token.code} berhasil dihapus.` };
+    return {
+      success: true,
+      message: `ID Kelompok ${token.code} berhasil dihapus.${linkedSubmission ? ' Sesi dan progres kelompok yang terhubung juga dihapus.' : ''}`,
+    };
   };
 
   const replaceGroupToken = (id: string): GroupToken => {
