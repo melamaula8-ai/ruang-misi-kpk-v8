@@ -36,6 +36,7 @@ import { useAssessment } from '../../context/AssessmentContext';
 import type { LearningContent } from '../../context/AssessmentContext';
 import { calculateLCM, addDaysToDate, checkSimilarity } from '../../utils/math';
 import { exportAssessmentToExcel } from '../../utils/excelExport';
+import type { ExcelDownload } from '../../utils/excelExport';
 import { getQuestionAnswerRows } from '../../utils/questionAnswerRows';
 import { INITIAL_QUESTION_BANK } from '../../data/questionBank';
 
@@ -178,14 +179,24 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
   const [tokenQuantity, setTokenQuantity] = useState(5);
   const [tokenPrefix, setTokenPrefix] = useState('KPK');
   const [tokenNotice, setTokenNotice] = useState('');
+  const [tokenCreating, setTokenCreating] = useState(false);
   const [copiedLink, setCopiedLink] = useState('');
   const [exportNotice, setExportNotice] = useState('');
+  const [excelDownload, setExcelDownload] = useState<ExcelDownload | null>(null);
 
-  const handleGenerateClassTokens = () => {
+  const handleGenerateClassTokens = async () => {
     if (cloudStatus !== 'online') { setTokenNotice('Database belum terhubung. Tunggu sampai status Terhubung sebelum membuat ID kelas.'); return; }
-    const created = createGroupTokens(tokenQuantity, tokenPrefix.trim() || 'KPK');
-    setTokenNotice(`${created.length} ID kelas berhasil dibuat. Bagikan ID atau tautan kepada kelompok yang sesuai.`);
-    setCopiedLink('');
+    setTokenCreating(true);
+    setTokenNotice('Membuat ID dan menghubungkannya dengan akun guru…');
+    try {
+      const created = await createGroupTokens(tokenQuantity, tokenPrefix.trim() || 'KPK');
+      setTokenNotice(`${created.length} ID berhasil dibuat dan terhubung ke akun guru ini. Bagikan ID atau tautan kepada kelompok yang sesuai.`);
+      setCopiedLink('');
+    } catch (error) {
+      setTokenNotice(error instanceof Error ? error.message : 'ID kelas gagal dibuat. Periksa koneksi lalu coba lagi.');
+    } finally {
+      setTokenCreating(false);
+    }
   };
 
   const getClassLink = (code: string) => `${window.location.origin}${window.location.pathname}?kelas=${encodeURIComponent(code)}`;
@@ -272,10 +283,22 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
   };
 
   // Multi-Sheet Microsoft Excel (.XLSX) Export
+  const startExcelDownload = (file: ExcelDownload) => {
+    setExcelDownload(file);
+    window.setTimeout(() => URL.revokeObjectURL(file.url), 300_000);
+    const anchor = document.createElement('a');
+    anchor.href = file.url;
+    anchor.download = file.fileName;
+    anchor.style.display = 'none';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setExportNotice('Berkas Excel sudah disiapkan. Jika unduhan tidak dimulai, gunakan tombol “Unduh ulang Excel” di bawah.');
+  };
+
   const handleExportXLSX = () => {
     try {
-      exportAssessmentToExcel(allSubmissions, rubricConfig, 'Rekap_Asesmen_Formatif_KPK_Kelas_V', questions);
-      setExportNotice('Berkas Excel berhasil disiapkan. Periksa folder Unduhan pada perangkat ini.');
+      startExcelDownload(exportAssessmentToExcel(allSubmissions, rubricConfig, 'Rekap_Asesmen_Formatif_KPK_Kelas_V', questions));
     } catch (error) {
       console.error('[Ruang Misi KPK] Ekspor Excel gagal:', error);
       setExportNotice('Unduhan Excel gagal dibuat. Coba lagi atau gunakan CSV.');
@@ -288,8 +311,7 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
       ? selectedSubmission.team.teamName.replace(/\s+/g, '_')
       : selectedSubmission.id;
     try {
-      exportAssessmentToExcel([selectedSubmission], rubricConfig, `Kartu_Nilai_KPK_${groupName}`, questions);
-      setExportNotice('Kartu nilai Excel berhasil disiapkan. Periksa folder Unduhan.');
+      startExcelDownload(exportAssessmentToExcel([selectedSubmission], rubricConfig, `Kartu_Nilai_KPK_${groupName}`, questions));
     } catch (error) {
       console.error('[Ruang Misi KPK] Ekspor kartu Excel gagal:', error);
       setExportNotice('Unduhan Excel gagal dibuat. Coba lagi atau gunakan ekspor rekap CSV.');
@@ -525,7 +547,7 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
         })}
       </div>
 
-      {exportNotice && <div role="status" className="rounded-xl border border-[#DCE9C6] bg-[#F4F9E9] px-4 py-3 text-sm font-semibold text-[#42631D]">{exportNotice}</div>}
+      {exportNotice && <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#DCE9C6] bg-[#F4F9E9] px-4 py-3 text-sm font-semibold text-[#42631D]"><span>{exportNotice}</span>{excelDownload && <a href={excelDownload.url} download={excelDownload.fileName} className="inline-flex rounded-lg bg-[#4A671E] px-3 py-2 text-xs font-extrabold text-white hover:bg-[#385017]">Unduh ulang Excel</a>}</div>}
 
       {/* TAB: ID DAN LINK KELAS */}
       {activeTab === 'akses_kelas' && (
@@ -552,7 +574,7 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
                     </select>
                   </div>
                 </div>
-                <button type="button" onClick={handleGenerateClassTokens} disabled={cloudStatus !== 'online'} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#FF913D] px-4 py-3 text-sm font-black text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#E9782E] disabled:cursor-not-allowed disabled:opacity-50"><KeyRound className="h-4 w-4"/> Buat {tokenQuantity} ID Kelas</button>
+                <button type="button" onClick={() => void handleGenerateClassTokens()} disabled={cloudStatus !== 'online' || tokenCreating} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#FF913D] px-4 py-3 text-sm font-black text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#E9782E] disabled:cursor-not-allowed disabled:opacity-50"><KeyRound className="h-4 w-4"/> {tokenCreating ? 'Menghubungkan ID…' : `Buat ${tokenQuantity} ID Kelas`}</button>
                 <p className="mt-3 text-[11px] leading-5 text-[#8C7A70]">Status database: <strong className={cloudStatus === 'online' ? 'text-[#4A671E]' : 'text-[#B7652B]'}>{cloudStatus === 'online' ? 'Terhubung' : cloudStatus === 'connecting' ? 'Menghubungkan' : 'Belum terhubung'}</strong>. Pastikan status terhubung sebelum membagikan kode ke murid.</p>
               </div>
             </div>

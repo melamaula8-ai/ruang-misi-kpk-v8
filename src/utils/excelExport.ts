@@ -56,6 +56,11 @@ export const getStatusLabel = (status: string): string => {
 /**
  * Export all formative assessment evaluation data to an Excel (.xlsx) file
  */
+export interface ExcelDownload {
+  url: string;
+  fileName: string;
+}
+
 export const exportAssessmentToExcel = (
   submissions: AssessmentSubmission[],
   rubricConfig?: RubricConfig,
@@ -70,7 +75,7 @@ export const exportAssessmentToExcel = (
   const rekapData: (string | number)[][] = [
     ['REKAPITULASI HASIL ASESMEN FORMATIF MATEMATIKA KELAS V SD/MI'],
     ['Materi Pokok: Kelipatan Persekutuan Terkecil (KPK) - 4 Tahap Polya'],
-    [`Tanggal Ekspor: ${new Date().toLocaleDateString('id-ID', { dateStyle: 'full', timeStyle: 'short' })}`],
+    [`Tanggal Ekspor: ${new Date().toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'short' })}`],
     [''], // Baris kosong pemisah
     [
       'No',
@@ -351,9 +356,14 @@ export const exportAssessmentToExcel = (
   ];
   XLSX.utils.book_append_sheet(wb, wsRubrik, 'Panduan Rubrik');
 
-  // Trigger browser download of .xlsx
+  // Build the workbook into a Blob. Returning a stable link lets the teacher
+  // retry the download with a fresh user gesture if the browser blocks the first click.
   const dateStamp = new Date().toISOString().slice(0, 10);
-  const fullFileName = `${fileNamePrefix}_${dateStamp}.xlsx`;
-  // Let SheetJS manage browser-specific download timing and object URL cleanup.
-  XLSX.writeFile(wb, fullFileName, { compression: true });
+  const safePrefix = fileNamePrefix.replace(/[<>:"/\\|?*\u0000-\u001F]/g, '_').trim().slice(0, 100) || 'Rekap_Asesmen_KPK';
+  const fullFileName = `${safePrefix}_${dateStamp}.xlsx`;
+  const bytes = XLSX.write(wb, { bookType: 'xlsx', type: 'array', compression: true });
+  if (!bytes || bytes.byteLength === 0) throw new Error('Berkas Excel kosong dan tidak dapat diunduh.');
+  const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  return { url, fileName: fullFileName } satisfies ExcelDownload;
 };

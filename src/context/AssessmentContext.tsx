@@ -33,7 +33,7 @@ interface AssessmentContextType {
   groupTokens: GroupToken[];
   activeGroupToken: GroupToken | null;
   hasVerifiedGroupToken: boolean;
-  createGroupTokens: (quantity: number, customPrefix?: string) => GroupToken[];
+  createGroupTokens: (quantity: number, customPrefix?: string) => Promise<GroupToken[]>;
   createStudentGroupToken: () => Promise<{ success: boolean; message: string; code?: string }>;
   toggleGroupTokenStatus: (id: string, newStatus: GroupTokenStatus) => void;
   deleteGroupToken: (id: string) => { success: boolean; message: string };
@@ -801,27 +801,25 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   // SECTION A: SISTEM ID KELOMPOK UNIK
   // ==========================================
 
-  // A1: Pembuatan ID Kelompok oleh Guru dengan jaminan keunikan 100%
-  const createGroupTokens = (quantity: number, customPrefix: string = 'KPK'): GroupToken[] => {
-    const count = Math.max(1, Math.min(50, quantity));
-    const existing = new Set(groupTokens.map((t) => t.code.toUpperCase()));
-    const newTokens: GroupToken[] = [];
-
-    for (let i = 0; i < count; i++) {
-      const uniqueCode = generateUniqueGroupCode(existing, customPrefix.toUpperCase());
-      existing.add(uniqueCode);
-
-      const token: GroupToken = {
-        id: 'tok_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
-        code: uniqueCode,
-        status: 'available',
-        createdAt: new Date().toISOString(),
-      };
-      newTokens.push(token);
+  // Teacher-issued IDs are created by the server so each is saved under the
+  // authenticated account and tied to its class before being shared.
+  const createGroupTokens = async (quantity: number, customPrefix: string = 'KPK'): Promise<GroupToken[]> => {
+    const response = await fetch('/api/group-token', {
+      method: 'POST',
+      headers: cloudHeaders(true),
+      cache: 'no-store',
+      body: JSON.stringify({ quantity, prefix: customPrefix, className: `Kelas ${new Date().toLocaleDateString('id-ID')}` }),
+    });
+    const result: { error?: string; tokens?: GroupToken[] } = await response.json().catch(() => ({}));
+    if (!response.ok || !Array.isArray(result.tokens)) {
+      throw new Error(result.error || 'ID kelas gagal dibuat pada akun guru. Silakan masuk kembali dan coba lagi.');
     }
-
-    setGroupTokens((prev) => [...prev, ...newTokens]);
-    return newTokens;
+    const createdTokens = result.tokens;
+    setGroupTokens((previous) => {
+      const known = new Set(previous.map((token) => token.id));
+      return [...previous, ...createdTokens.filter((token) => !known.has(token.id))];
+    });
+    return createdTokens;
   };
 
   const createStudentGroupToken = async (): Promise<{ success: boolean; message: string; code?: string }> => {

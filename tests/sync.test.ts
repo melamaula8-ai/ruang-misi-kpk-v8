@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createFakeD1 } from './fakeD1';
-import { handleSync, handleTeacherAuth, handleClasses, handleGroupToken, type Env } from '../server/core';
+import { handleSync, handleTeacherAuth, handleClasses, handleGroupToken, issueTeacherToken, type Env } from '../server/core';
 
 const SECRET = 'rahasia-uji-yang-cukup-panjang-1234567890';
 function makeEnv(): Env & { DB: ReturnType<typeof createFakeD1> } {
@@ -247,4 +247,42 @@ test('sesi kelompok hanya dibuat otomatis setelah kode kelas sah diverifikasi', 
   assert.equal(result.token.classId, createdData.class.id);
   assert.equal(result.token.classCode, joinCode);
   assert.match(result.token.code, /^KPK-[A-Z2-9]{3}-[A-Z2-9]{3}$/);
+});
+
+test('ID yang dibuat guru terikat ke akun dan submission siswa masuk ke monitoring pemilik', async () => {
+  const env = makeEnv();
+  const teacher = await teacherToken(env);
+  const response = await handleGroupToken(new Request('http://x/api/group-token', {
+    method: 'POST', headers: { Authorization: `Bearer ${teacher}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ quantity: 2, prefix: 'KPK' }),
+  }), env);
+  assert.equal(response.status, 201);
+  const issued = (await response.json() as any).tokens as Array<{ id: string; code: string; classId: string; classCode: string }>;
+  assert.equal(issued.length, 2);
+  assert.match(issued[0].code, /^KPK-GURU-[A-Z2-9]{6}$/);
+  assert.ok(issued[0].classId && issued[0].classCode);
+
+  const assigned = { ...issued[0], status: 'available' };
+  assert.equal((await claim(env, assigned, 'student-session-1')).status, 200);
+  assert.equal((await call(env, 'POST', { body: { upsertSubmissions: [sub('student-session-1', assigned)] } })).status, 200);
+  const ownerData = await call(env, 'GET', { token: teacher });
+  assert.equal(ownerData.body.submissions.length, 1);
+  assert.equal(ownerData.body.submissions[0].groupCode, assigned.code);
+
+  const otherTeacher = await issueTeacherToken(env, 'guru-lain');
+  const otherData = await call(env, 'GET', { token: otherTeacher });
+  assert.equal(otherData.body.submissions.length, 0);
+  assert.equal(otherData.body.tokens.length, 0);
+});
+
+test('ID lama yang belum memiliki metadata kelas tetap dapat mengirim hasil', async () => {
+  const env = makeEnv();
+  const teacher = await teacherToken(env);
+  const oldToken = { id: 'old-token-1', code: 'KPK-LAMA-123456', status: 'available', createdAt: new Date().toISOString() };
+  assert.equal((await call(env, 'POST', { token: teacher, body: { upsertTokens: [oldToken] } })).status, 200);
+  assert.equal((await claim(env, oldToken, 'old-student-session')).status, 200);
+  assert.equal((await call(env, 'POST', { body: { upsertSubmissions: [sub('old-student-session', oldToken)] } })).status, 200);
+  const monitored = await call(env, 'GET', { token: teacher });
+  assert.equal(monitored.body.submissions.length, 1);
+  assert.equal(monitored.body.submissions[0].groupCode, oldToken.code);
 });

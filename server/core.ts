@@ -184,8 +184,49 @@ export async function handleClasses(request: Request, env: Env): Promise<Respons
 export async function handleGroupToken(request: Request, env: Env): Promise<Response> {
   if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
   if (!env.DB) return json({ error: 'Database belum tersedia.' }, 503);
+  const hasBearer = (request.headers.get('authorization') || '').startsWith('Bearer ');
+  const teacherIdentity = await getTeacherIdentity(env, request);
+  if (hasBearer && !teacherIdentity) return json({ error: 'Sesi guru tidak valid atau sudah kedaluwarsa.' }, 401);
   let body: any;
   try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+
+  // ID yang dibuat guru selalu diikat ke akun pemilik dan satu record kelas di D1.
+  // Ini membuat sesi siswa tersimpan pada owner_id yang sama dengan dashboard guru.
+  if (teacherIdentity) {
+    const quantity = Math.max(1, Math.min(50, Number.isInteger(body?.quantity) ? body.quantity : 1));
+    const prefix = (typeof body?.prefix === 'string' ? body.prefix : 'KPK').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) || 'KPK';
+    const accountTag = teacherIdentity.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12) || 'GURU';
+    const requestedName = typeof body?.className === 'string' ? body.className.trim().slice(0, 80) : '';
+    const className = requestedName || `Kelas ${teacherIdentity}`;
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const classId = crypto.randomUUID();
+      const classCode = `KELAS-${randomCode(6)}`;
+      const now = Date.now();
+      const tokens: any[] = Array.from({ length: quantity }, () => {
+        const code = `${prefix}-${accountTag}-${randomCode(6)}`;
+        return {
+          id: crypto.randomUUID(), code, status: 'available',
+          createdAt: new Date(now).toISOString(), classId, className, classCode,
+        };
+      });
+      try {
+        const statements = [env.DB.prepare(
+          "INSERT INTO classes (id, teacher_username, name, join_code, status, group_count, created_at) VALUES (?, ?, ?, ?, 'active', ?, ?)"
+        ).bind(classId, teacherIdentity, className, classCode, quantity, now)];
+        for (const token of tokens) statements.push(env.DB.prepare(
+          "INSERT INTO group_tokens (id, code, status, claimed_by, data, updated_at, owner_id) VALUES (?, ?, 'available', NULL, ?, ?, ?)"
+        ).bind(token.id, token.code, JSON.stringify(token), now, teacherIdentity));
+        await env.DB.batch(statements);
+        return json({ success: true, tokens, class: { id: classId, name: className, joinCode: classCode } }, 201);
+      } catch (error) {
+        if (/UNIQUE/i.test(String(error))) continue;
+        console.error('[group-token] Gagal membuat ID kelas guru:', error);
+        return json({ error: 'ID kelas gagal disimpan ke akun guru.' }, 500);
+      }
+    }
+    return json({ error: 'Belum berhasil membuat ID kelas yang unik. Coba kembali.' }, 503);
+  }
+
   const classCode = upper(body?.classCode);
   if (!classCode) return json({ error: 'Masukkan kode kelas dari guru.' }, 400);
   try {
@@ -390,17 +431,13 @@ async function handlePost(request: Request, env: Env, teacherIdentity: string | 
       if (row.status === 'disabled') throw new SyncError('FORBIDDEN', 'ID kelompok dinonaktifkan guru.', 403);
       const tokenClassId = typeof old.classId === 'string' ? old.classId : '';
       const tokenClassCode = upper(old.classCode);
-      if (!tokenClassId || !tokenClassCode) {
-        // Kompatibilitas: izinkan sesi lama yang sudah diklaim pemiliknya melanjutkan autosave,
-        // tetapi jangan izinkan klaim baru atas token statis/legacy yang tidak terhubung ke kelas.
-        if (row.status !== 'claimed' || row.claimed_by !== sid) {
-          throw new SyncError('FORBIDDEN', 'ID sesi ini tidak terhubung ke kelas. Bergabunglah melalui kode kelas dari guru.', 403);
-        }
-      } else {
+      if (tokenClassId && tokenClassCode) {
         const linkedClass = await db.prepare("SELECT id FROM classes WHERE id = ? AND join_code = ? AND status = 'active'")
           .bind(tokenClassId, tokenClassCode).first();
         if (!linkedClass) throw new SyncError('FORBIDDEN', 'Kelas untuk sesi ini tidak aktif atau tidak valid.', 403);
       }
+      // Older teacher-issued tokens predate class metadata. Possession of the
+      // exact stored token remains the authorization for those existing IDs.
       if (await isRevoked(db, sid)) throw new SyncError('SESSION_DELETED', 'Sesi ini telah dihapus oleh guru. Masukkan kembali ID kelompok untuk memulai sesi baru.', 409);
       if (row.status === 'claimed' && row.claimed_by !== sid) throw new SyncError('TOKEN_CLAIMED', 'ID kelompok sudah dipakai kelompok lain.', 409);
       // Hanya bidang klaim yang diambil dari siswa; catatan guru dan bidang lain tetap aman.

@@ -48,9 +48,20 @@ export const ClassAccessView: React.FC<Props> = ({ preloadedCode = '', onSuccess
     }
     setBusy(true);
     try {
+      // A teacher may share a group ID directly. Resolve it first so this group
+      // keeps the exact server record owned by that teacher.
+      const directGroupResult = await verifyAndClaimGroupToken(code.trim());
+      if (directGroupResult.success) {
+        setMessage(directGroupResult.message);
+        window.setTimeout(onSuccess, 450);
+        return;
+      }
+
+      // Also support a class invitation code: validate the class, then allocate
+      // a distinct group ID that is stored under the class owner's account.
       const classResult = await validateStudentClassCode(code.trim());
       if (!classResult.success) {
-        setError(classResult.message);
+        setError(classResult.message || directGroupResult.message);
         return;
       }
       const response = await fetch('/api/group-token', {
