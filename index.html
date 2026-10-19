@@ -3,6 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      (() => {
+        const viewport = document.querySelector('meta[name="viewport"]');
+        const mobile = window.matchMedia('(max-width: 767px)');
+        const applyViewport = () => {
+          viewport?.setAttribute(
+            'content',
+            mobile.matches
+              ? 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no'
+              : 'width=device-width, initial-scale=1.0',
+          );
+        };
+        applyViewport();
+        mobile.addEventListener('change', applyViewport);
+      })();
+    </script>
     <title>Ruang Misi KPK - Asesmen Formatif Matematika Kelas V</title>
     <meta name="description" content="Aplikasi Asesmen Formatif Matematika Kelas V SD/MI pada materi Kelipatan Persekutuan Terkecil (KPK) dengan pendekatan TaRL dan 4 Tahap Polya." />
     <meta property="og:title" content="Ruang Misi KPK - Asesmen Formatif Matematika Kelas V" />

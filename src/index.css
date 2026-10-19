@@ -173,7 +173,10 @@ main > .max-w-6xl, main > .max-w-5xl, main > .teacher-dashboard-page,
   html, body, #root { width: 100%; max-width: 100%; }
   #root > * { width: 100%; max-width: 100%; }
   main .grid { grid-auto-columns: minmax(0, 1fr); }
-  main .grid > *, main .flex > * { min-width: 0; }
+  main .grid > * { min-width: 0; }
+  .teacher-dashboard-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; overflow: visible; }
+  .teacher-dashboard-tabs button { min-width: 0; justify-content: flex-start; white-space: normal; text-align: left; line-height: 1.25; padding: .65rem .55rem; border: 1px solid #EAE3D9; border-radius: .75rem; }
+  .teacher-dashboard-tabs button span { min-width: 0; overflow-wrap: anywhere; }
   .adventure-page { padding-left: 1rem; padding-right: 1rem; padding-bottom: 2.5rem; gap: 1.25rem; }
   .adventure-page > section, .teacher-dashboard-page section { border-radius: 1.25rem; }
   .teacher-dashboard-page { padding-left: 1rem; padding-right: 1rem; }

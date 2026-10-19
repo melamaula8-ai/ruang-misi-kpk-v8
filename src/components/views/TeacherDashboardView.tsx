@@ -438,7 +438,7 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
       </div>
 
       {/* Tabs Navigation */}
-      <div className="flex border-b border-[#EAE3D9] overflow-x-auto gap-2">
+      <div className="teacher-dashboard-tabs flex min-w-0 max-w-full border-b border-[#EAE3D9] overflow-x-auto gap-2">
         {[
           { id: 'ringkasan' as const, label: 'Ringkasan Kelas', icon: BookOpen },
           { id: 'penilaian' as const, label: 'Pemeriksaan & Rubrik', icon: Award },
