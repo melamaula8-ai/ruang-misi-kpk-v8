@@ -1393,16 +1393,6 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
     setIsTimerActive(false);
 
-    // Apresiasi audio setelah murid berhasil mengirim asesmen. File lokal di public/sounds.
-    // Dipanggil dari aksi kirim oleh pengguna; bila browser membatasi audio, alur pengiriman tetap berhasil.
-    try {
-      const applause = new Audio('/sounds/tepuk-tangan.wav');
-      applause.volume = 0.82;
-      void applause.play().catch(() => undefined);
-    } catch {
-      // Audio adalah tambahan apresiasi, bukan syarat untuk mengirim jawaban.
-    }
-
     return {
       success: true,
       message: 'Asesmen berhasil dikirim! Menunggu pemeriksaan dan publikasi hasil oleh guru.',

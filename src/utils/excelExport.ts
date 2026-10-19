@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 import { AssessmentSubmission, MissionQuestion, RubricConfig } from '../types';
 import { getQuestionAnswerRows } from './questionAnswerRows';
 
@@ -60,6 +60,67 @@ export interface ExcelDownload {
   url: string;
   fileName: string;
 }
+
+const applyReportLayout = (
+  sheet: XLSX.WorkSheet,
+  headerRow: number,
+  columnCount: number,
+  widths: number[]
+) => {
+  const lastRow = XLSX.utils.decode_range(sheet['!ref'] || 'A1').e.r;
+  const lastColumn = columnCount - 1;
+  const thinBorder = { style: 'thin' as const, color: { rgb: 'E6DDD5' } };
+  const titleStyle: XLSX.CellStyle = {
+    fill: { patternType: 'solid', fgColor: { rgb: '3E2723' } },
+    font: { name: 'Aptos Display', sz: 16, bold: true, color: { rgb: 'FFFFFF' } },
+    alignment: { vertical: 'center', horizontal: 'left' },
+  };
+  const subtitleStyle: XLSX.CellStyle = {
+    fill: { patternType: 'solid', fgColor: { rgb: 'F7F0E8' } },
+    font: { name: 'Aptos', sz: 10, color: { rgb: '6D5A50' } },
+    alignment: { vertical: 'center', wrapText: true },
+  };
+  const headerStyle: XLSX.CellStyle = {
+    fill: { patternType: 'solid', fgColor: { rgb: '95634F' } },
+    font: { name: 'Aptos', sz: 10, bold: true, color: { rgb: 'FFFFFF' } },
+    alignment: { vertical: 'center', horizontal: 'center', wrapText: true },
+    border: { bottom: { style: 'medium', color: { rgb: '704A36' } } },
+  };
+  const merges = sheet['!merges'] || [];
+  [0, 1, 2].forEach((row) => {
+    if (row < headerRow) {
+      merges.push({ s: { r: row, c: 0 }, e: { r: row, c: lastColumn } });
+      const address = XLSX.utils.encode_cell({ r: row, c: 0 });
+      if (sheet[address]) sheet[address].s = row === 0 ? titleStyle : subtitleStyle;
+    }
+  });
+  sheet['!merges'] = merges;
+  sheet['!cols'] = widths.map((wch) => ({ wch }));
+  sheet['!rows'] = Array.from({ length: lastRow + 1 }, (_, row) => ({
+    hpt: row === 0 ? 32 : row === headerRow ? 34 : row < headerRow ? 22 : 30,
+  }));
+  sheet['!autofilter'] = {
+    ref: XLSX.utils.encode_range({ s: { r: headerRow, c: 0 }, e: { r: lastRow, c: lastColumn } }),
+  };
+
+  for (let column = 0; column <= lastColumn; column += 1) {
+    const headerAddress = XLSX.utils.encode_cell({ r: headerRow, c: column });
+    if (sheet[headerAddress]) sheet[headerAddress].s = headerStyle;
+  }
+  for (let row = headerRow + 1; row <= lastRow; row += 1) {
+    for (let column = 0; column <= lastColumn; column += 1) {
+      const address = XLSX.utils.encode_cell({ r: row, c: column });
+      const cell = sheet[address];
+      if (!cell) continue;
+      cell.s = {
+        fill: { patternType: 'solid', fgColor: { rgb: row % 2 === 0 ? 'F8F5F1' : 'FFFFFF' } },
+        font: { name: 'Aptos', sz: 10, color: { rgb: '3E2723' } },
+        alignment: { vertical: 'center', wrapText: true },
+        border: { bottom: thinBorder },
+      };
+    }
+  }
+};
 
 export const exportAssessmentToExcel = (
   submissions: AssessmentSubmission[],
@@ -141,6 +202,7 @@ export const exportAssessmentToExcel = (
     { wch: 45 }, // Umpan Balik Guru
     { wch: 20 }, // Waktu Pengumpulan
   ];
+  applyReportLayout(wsRekap, 4, rekapData[4].length, wsRekap['!cols'].map((column) => column.wch ?? 14));
 
   XLSX.utils.book_append_sheet(wb, wsRekap, 'Rekap Nilai');
 
@@ -186,6 +248,7 @@ export const exportAssessmentToExcel = (
     { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, // K4
     { wch: 18 }, // Total
   ];
+  applyReportLayout(wsDetail, 3, detailPolyaData[3].length, wsDetail['!cols'].map((column) => column.wch ?? 14));
   XLSX.utils.book_append_sheet(wb, wsDetail, 'Rincian Tahap Polya');
 
   // ==========================================
@@ -250,6 +313,7 @@ export const exportAssessmentToExcel = (
     { wch: 20 },
     { wch: 50 },
   ];
+  applyReportLayout(wsTranskrip, 3, transkripData[3].length, wsTranskrip['!cols'].map((column) => column.wch ?? 14));
   XLSX.utils.book_append_sheet(wb, wsTranskrip, 'Jawaban Murid');
 
   // ==========================================
@@ -312,6 +376,7 @@ export const exportAssessmentToExcel = (
     { wch: 30 },
     { wch: 30 },
   ];
+  applyReportLayout(wsPresRef, 3, presentasiRefleksiData[3].length, wsPresRef['!cols'].map((column) => column.wch ?? 14));
   XLSX.utils.book_append_sheet(wb, wsPresRef, 'Presentasi & Refleksi');
 
   // ==========================================
@@ -335,6 +400,7 @@ export const exportAssessmentToExcel = (
     { wch: 16 },
     { wch: 60 },
   ];
+  applyReportLayout(wsRubrik, 3, rubrikData[3].length, wsRubrik['!cols'].map((column) => column.wch ?? 14));
   XLSX.utils.book_append_sheet(wb, wsRubrik, 'Panduan Rubrik');
 
   // Build the workbook into a Blob. Returning a stable link lets the teacher
@@ -342,7 +408,7 @@ export const exportAssessmentToExcel = (
   const dateStamp = new Date().toISOString().slice(0, 10);
   const safePrefix = fileNamePrefix.replace(/[<>:"/\\|?*\u0000-\u001F]/g, '_').trim().slice(0, 100) || 'Rekap_Asesmen_KPK';
   const fullFileName = `${safePrefix}_${dateStamp}.xlsx`;
-  const bytes = XLSX.write(wb, { bookType: 'xlsx', type: 'array', compression: true });
+  const bytes = XLSX.write(wb, { bookType: 'xlsx', type: 'array', compression: true, cellStyles: true });
   if (!bytes || bytes.byteLength === 0) throw new Error('Berkas Excel kosong dan tidak dapat diunduh.');
   const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const url = URL.createObjectURL(blob);
