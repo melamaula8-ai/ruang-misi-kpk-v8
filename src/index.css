@@ -167,6 +167,9 @@ main > .max-w-6xl, main > .max-w-5xl, main > .teacher-dashboard-page,
   html { font-size: 14.5px; }
   :root { --reading-font-size: 1rem; }
   body { font-size: var(--reading-font-size); }
+  :root body input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  :root body select,
+  :root body textarea { font-size: 16px; }
   html, body, #root { width: 100%; max-width: 100%; }
   #root > * { width: 100%; max-width: 100%; }
   main .grid { grid-auto-columns: minmax(0, 1fr); }
