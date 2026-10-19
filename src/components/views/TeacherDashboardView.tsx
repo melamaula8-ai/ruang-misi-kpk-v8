@@ -179,6 +179,7 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
   const [tokenPrefix, setTokenPrefix] = useState('KPK');
   const [tokenNotice, setTokenNotice] = useState('');
   const [copiedLink, setCopiedLink] = useState('');
+  const [exportNotice, setExportNotice] = useState('');
 
   const handleGenerateClassTokens = () => {
     if (cloudStatus !== 'online') { setTokenNotice('Database belum terhubung. Tunggu sampai status Terhubung sebelum membuat ID kelas.'); return; }
@@ -272,7 +273,13 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
 
   // Multi-Sheet Microsoft Excel (.XLSX) Export
   const handleExportXLSX = () => {
-    exportAssessmentToExcel(allSubmissions, rubricConfig, 'Rekap_Asesmen_Formatif_KPK_Kelas_V', questions);
+    try {
+      exportAssessmentToExcel(allSubmissions, rubricConfig, 'Rekap_Asesmen_Formatif_KPK_Kelas_V', questions);
+      setExportNotice('Berkas Excel berhasil disiapkan. Periksa folder Unduhan pada perangkat ini.');
+    } catch (error) {
+      console.error('[Ruang Misi KPK] Ekspor Excel gagal:', error);
+      setExportNotice('Unduhan Excel gagal dibuat. Coba lagi atau gunakan CSV.');
+    }
   };
 
   // Export single selected group to Excel
@@ -280,12 +287,13 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
     const groupName = selectedSubmission.team.teamName
       ? selectedSubmission.team.teamName.replace(/\s+/g, '_')
       : selectedSubmission.id;
-    exportAssessmentToExcel(
-      [selectedSubmission],
-      rubricConfig,
-      `Kartu_Nilai_KPK_${groupName}`,
-      questions
-    );
+    try {
+      exportAssessmentToExcel([selectedSubmission], rubricConfig, `Kartu_Nilai_KPK_${groupName}`, questions);
+      setExportNotice('Kartu nilai Excel berhasil disiapkan. Periksa folder Unduhan.');
+    } catch (error) {
+      console.error('[Ruang Misi KPK] Ekspor kartu Excel gagal:', error);
+      setExportNotice('Unduhan Excel gagal dibuat. Coba lagi atau gunakan ekspor rekap CSV.');
+    }
   };
 
   // Custom Logo upload handler
@@ -490,14 +498,13 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
       {/* Tabs Navigation */}
       <div className="teacher-dashboard-tabs flex min-w-0 max-w-full border-b border-[#EAE3D9] overflow-x-auto gap-2">
         {[
-          { id: 'ringkasan' as const, label: 'Ringkasan Kelas', icon: BookOpen },
+          { id: 'ringkasan' as const, label: 'Ikhtisar', icon: BookOpen },
           { id: 'penilaian' as const, label: 'Pemeriksaan & Rubrik', icon: Award },
-          { id: 'kelompok' as const, label: 'Data Kelompok & Pintu', icon: Users },
-          { id: 'akses_kelas' as const, label: 'Buat ID / Link Kelas', icon: KeyRound },
-          { id: 'editor' as const, label: 'Editor Pembelajaran', icon: BookOpen },
-          { id: 'bank_soal' as const, label: 'Bank Soal', icon: Edit },
-          { id: 'rubrik' as const, label: 'Pengaturan Bobot Rubrik', icon: Sliders },
-          { id: 'rekap' as const, label: 'Rekap Nilai & Ekspor', icon: Download },
+          { id: 'kelompok' as const, label: 'Pengaturan Kelas', icon: Sliders },
+          { id: 'akses_kelas' as const, label: 'ID Kelas', icon: KeyRound },
+          { id: 'editor' as const, label: 'Materi & Soal', icon: BookOpen },
+          { id: 'rubrik' as const, label: 'Rubrik', icon: Sliders },
+          { id: 'rekap' as const, label: 'Ekspor Nilai', icon: Download },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -517,6 +524,8 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
           );
         })}
       </div>
+
+      {exportNotice && <div role="status" className="rounded-xl border border-[#DCE9C6] bg-[#F4F9E9] px-4 py-3 text-sm font-semibold text-[#42631D]">{exportNotice}</div>}
 
       {/* TAB: ID DAN LINK KELAS */}
       {activeTab === 'akses_kelas' && (
@@ -550,9 +559,10 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
           </section>
           {tokenNotice && <div role="status" className="rounded-xl border border-[#DCE9C6] bg-[#F4F9E9] px-4 py-3 text-sm font-semibold text-[#42631D]">{tokenNotice}</div>}
           <section className="space-y-4 rounded-2xl border border-[#EAE3D9] bg-white p-5 shadow-sm sm:p-6">
-            <div className="flex flex-wrap items-end justify-between gap-3"><div><h3 className="text-lg font-black text-[#3E2723]">Daftar ID dan link kelas</h3><p className="mt-1 text-xs text-[#6D5A50]">Salin link untuk membagikan akses. ID yang sudah diklaim terhubung ke sesi kelompoknya.</p></div><span className="rounded-full bg-[#FAF8F5] px-3 py-1.5 text-xs font-extrabold text-[#95634F]">{groupTokens.length} ID tercatat</span></div>
+            <div className="flex flex-wrap items-end justify-between gap-3"><div><h3 className="text-lg font-black text-[#3E2723]">Daftar ID dan link kelas</h3><p className="mt-1 text-xs text-[#6D5A50]">Salin link untuk membagikan akses. ID yang dipakai menampilkan sesi kelompok terkait.</p></div><span className="rounded-full bg-[#FAF8F5] px-3 py-1.5 text-xs font-extrabold text-[#95634F]">{groupTokens.length} ID · {groupTokens.filter(token => token.status === 'claimed').length} dipakai · {groupTokens.filter(token => token.status === 'available').length} tersedia</span></div>
             {groupTokens.length === 0 ? <div className="rounded-2xl border-2 border-dashed border-[#E8D8CE] bg-[#FFFCF7] px-5 py-10 text-center"><KeyRound className="mx-auto h-8 w-8 text-[#95634F]"/><p className="mt-3 font-black text-[#3E2723]">Belum ada ID kelas</p><p className="mt-1 text-sm text-[#6D5A50]">Buat ID di bagian atas untuk mulai membagikan akses.</p></div> : <div className="grid gap-3 lg:grid-cols-2">{groupTokens.slice().sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).map(token => {
-              const statusLabel = token.status === 'claimed' ? 'Sudah digunakan' : token.status === 'disabled' ? 'Dinonaktifkan' : token.status === 'resubmit_allowed' ? 'Boleh mengumpulkan ulang' : 'Siap digunakan';
+              const linkedSubmission = allSubmissions.find(submission => submission.id === token.claimedBySubmissionId || submission.groupId === token.id || submission.groupCode?.toUpperCase() === token.code.toUpperCase());
+              const statusLabel = token.status === 'claimed' ? `Dipakai · ${linkedSubmission?.team.teamName || token.teamName || 'sesi kelompok terhubung'}` : token.status === 'disabled' ? 'Dinonaktifkan' : token.status === 'resubmit_allowed' ? 'Boleh mengumpulkan ulang' : 'Siap digunakan';
               return <article key={token.id} className="rounded-2xl border border-[#EAE3D9] bg-[#FFFCF7] p-4 transition hover:border-[#D8C4B9] hover:shadow-sm"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-mono text-xl font-black tracking-wider text-[#3E2723]">{token.code}</p><p className="mt-1 text-[11px] text-[#8C7A70]">Dibuat {new Date(token.createdAt).toLocaleDateString('id-ID')}</p></div><span className={`rounded-full px-2.5 py-1 text-[10px] font-extrabold ${token.status === 'claimed' ? 'bg-[#E8D8CE] text-[#704A36]' : token.status === 'disabled' ? 'bg-red-50 text-red-700' : 'bg-[#F2F9E5] text-[#4A671E]'}`}>{statusLabel}</span></div><div className="mt-3 break-all rounded-lg border border-[#EAE3D9] bg-white px-3 py-2 text-[11px] leading-5 text-[#6D5A50]">{getClassLink(token.code)}</div><div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => void handleCopyClassLink(token.code)} className="inline-flex items-center gap-1.5 rounded-lg bg-[#95634F] px-3 py-2 text-xs font-bold text-white transition hover:bg-[#754936]">{copiedLink === token.code ? <Check className="h-3.5 w-3.5"/> : <Copy className="h-3.5 w-3.5"/>} Salin link</button><button type="button" onClick={() => void handleCopyClassCode(token.code)} className="inline-flex items-center gap-1.5 rounded-lg border border-[#D8CFC8] bg-white px-3 py-2 text-xs font-bold text-[#3E2723] hover:bg-[#FAF8F5]"><KeyRound className="h-3.5 w-3.5"/> Salin ID</button>{token.status !== 'claimed' && <button type="button" onClick={() => { toggleGroupTokenStatus(token.id, token.status === 'disabled' ? 'available' : 'disabled'); setTokenNotice(`Status ID ${token.code} diperbarui.`); }} className="rounded-lg border border-[#D8CFC8] bg-white px-3 py-2 text-xs font-bold text-[#6D5A50] hover:bg-[#FAF8F5]">{token.status === 'disabled' ? 'Aktifkan' : 'Nonaktifkan'}</button>}<button type="button" onClick={() => { const activeSessionWarning = token.status === 'claimed' ? ' Kelompok yang sedang menggunakan ID ini akan dikeluarkan; jawaban, progres, dan timer sesi ikut dihapus.' : ''; if (window.confirm(`Hapus ID ${token.code}? ID ini tidak dapat digunakan lagi.${activeSessionWarning}`)) { const result = deleteGroupToken(token.id); setTokenNotice(result.message); } }} className="rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-50">Hapus</button></div></article>;
             })}</div>}
             <div className="flex gap-2 rounded-xl border border-[#F0D9A7] bg-[#FFF7DC] p-3 text-xs leading-5 text-[#795329]"><Link2 className="mt-0.5 h-4 w-4 shrink-0"/><span>Link kelas mempertahankan halaman pembuka yang sama. Murid tetap memilih “Masuk sebagai Murid”, mempelajari materi dan latihan, lalu ID pada link akan diverifikasi otomatis saat masuk ke halaman kelas.</span></div>
@@ -1296,7 +1306,7 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
         <div className="space-y-6">
           <section className="rounded-3xl border border-[#DCE9C6] bg-gradient-to-br from-[#F4F9E9] via-white to-[#FFF7DC] p-5 shadow-sm sm:p-8">
             <div className="flex flex-wrap items-start justify-between gap-4">
-              <div><span className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-[#4A671E] shadow-sm">RUANG KREASI GURU</span><h2 className="mt-3 text-2xl font-black text-[#3E2723] sm:text-3xl">Editor Pembelajaran</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-[#6D5A50]">Atur materi untuk ketiga pintu, sunting urutan dan isi soal, simpan sebagai draf, lalu terbitkan setelah pratinjau. Perubahan disimpan pada akun guru dan versi terbit yang dibaca murid terpisah dari draf.</p></div>
+              <div><span className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-[#4A671E] shadow-sm">RUANG KREASI GURU</span><h2 className="mt-3 text-2xl font-black text-[#3E2723] sm:text-3xl">Materi & Soal</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-[#6D5A50]">Atur materi dan soal untuk ketiga pintu belajar, simpan sebagai draf, lalu terbitkan setelah pratinjau.</p><button type="button" onClick={() => setActiveTab('bank_soal')} className="mt-3 rounded-lg border border-[#D8CFC8] bg-white px-3 py-2 text-xs font-bold text-[#704A36]">Atur jumlah soal per pintu</button></div>
               <div className="flex flex-wrap gap-2"><button type="button" onClick={() => setPreviewLearning((open) => !open)} className="rounded-xl border border-[#D8CFC8] bg-white px-4 py-2.5 text-sm font-extrabold text-[#704A36]">{previewLearning ? 'Tutup Pratinjau' : 'Pratinjau Murid'}</button><span className="self-center rounded-full bg-white px-3 py-2 text-xs font-bold text-[#4A671E]">Database: {cloudStatus === 'online' ? 'Terhubung' : cloudStatus === 'connecting' ? 'Menghubungkan' : 'Offline'}</span></div>
             </div>
           </section>

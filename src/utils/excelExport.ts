@@ -354,15 +354,6 @@ export const exportAssessmentToExcel = (
   // Trigger browser download of .xlsx
   const dateStamp = new Date().toISOString().slice(0, 10);
   const fullFileName = `${fileNamePrefix}_${dateStamp}.xlsx`;
-  const bytes = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-  const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = fullFileName;
-  link.style.display = 'none';
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  // Let SheetJS manage browser-specific download timing and object URL cleanup.
+  XLSX.writeFile(wb, fullFileName, { compression: true });
 };

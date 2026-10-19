@@ -8,7 +8,6 @@ import {
   Award,
   ArrowLeft,
   Calendar,
-  FileSpreadsheet,
   Volume2,
   VolumeX,
   Play,
@@ -16,7 +15,6 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { useAssessment } from '../../context/AssessmentContext';
-import { exportAssessmentToExcel } from '../../utils/excelExport';
 import { getQuestionAnswerRows } from '../../utils/questionAnswerRows';
 import { audioCelebration } from '../../utils/audioCelebration';
 
@@ -87,24 +85,6 @@ export const ResultsEvaluationView: React.FC<Props> = ({ onNavigate }) => {
 
         {isPublished && (
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                const teamName = activeSubmission.team.teamName
-                  ? activeSubmission.team.teamName.replace(/\s+/g, '_')
-                  : activeSubmission.id;
-                exportAssessmentToExcel(
-                  [activeSubmission],
-                  rubricConfig,
-                  `Hasil_Asesmen_KPK_${teamName}`,
-                  questions
-                );
-              }}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
-              title="Unduh Kartu Hasil Penilaian dalam format Microsoft Excel (.xlsx)"
-            >
-              <FileSpreadsheet className="w-4 h-4 text-emerald-100" />
-              <span>Unduh Excel (.XLSX)</span>
-            </button>
             <button
               onClick={() => window.print()}
               className="flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-[#FAF8F5] text-[#3E2723] border border-[#EAE3D9] text-xs font-bold rounded-xl transition-colors cursor-pointer"
