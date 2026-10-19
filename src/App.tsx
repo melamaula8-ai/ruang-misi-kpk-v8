@@ -189,7 +189,7 @@ function MainApp() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#FAF8F5] text-[#2D231E]">
+    <div className="min-h-screen w-full max-w-full min-w-0 flex flex-col bg-[#FAF8F5] text-[#2D231E]">
       <BackgroundMusic active={!musicBlockedForPractice && (showRoleLanding || currentView === 'beranda')} enabled={musicEnabled} />
       {(showRoleLanding || currentView === 'beranda') && (
         <button type="button" onClick={() => setMusicEnabled((enabled) => !enabled)} aria-label={musicEnabled ? 'Matikan musik latar' : 'Nyalakan musik latar'} title={musicEnabled ? 'Matikan musik latar' : 'Nyalakan musik latar'} className={`fixed bottom-5 right-4 z-50 inline-flex min-h-12 items-center gap-2 rounded-full border-2 border-white bg-[#3E2723] text-sm font-extrabold text-white shadow-xl transition hover:-translate-y-1 sm:bottom-7 sm:right-7 ${showRoleLanding ? 'w-12 justify-center p-0' : 'px-4'}`}>

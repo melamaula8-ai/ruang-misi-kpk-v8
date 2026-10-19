@@ -110,8 +110,10 @@ button { min-height: 2.65rem; }
 @media (prefers-reduced-motion: reduce) { .math-number-strip { animation: none !important; } }
 
 /* Consistent, touch friendly presentation across student, teacher and modal views. */
-html { scroll-behavior: smooth; }
-body { min-width: 320px; overflow-x: hidden; }
+html { width: 100%; min-width: 320px; scroll-behavior: smooth; }
+body { width: 100%; min-width: 320px; margin: 0; overflow-x: hidden; }
+#root { width: 100%; min-width: 320px; max-width: 100%; }
+#root > * { width: 100%; min-width: 0; max-width: 100%; }
 img, svg, video, canvas { max-width: 100%; }
 button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
@@ -162,6 +164,8 @@ main > .max-w-6xl, main > .max-w-5xl, main > .teacher-dashboard-page,
 .learning-card, .practice-question-card, .class-access-card,
 .mission-hub-hero, .identity-hero, .track-selection-hero { min-width: 0; }
 @media (max-width: 767px) {
+  html, body, #root { width: 100%; max-width: 100%; }
+  #root > * { width: 100%; max-width: 100%; }
   .adventure-page { padding-left: 1rem; padding-right: 1rem; padding-bottom: 2.5rem; gap: 1.25rem; }
   .adventure-page > section, .teacher-dashboard-page section { border-radius: 1.25rem; }
   .teacher-dashboard-page { padding-left: 1rem; padding-right: 1rem; }
