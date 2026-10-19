@@ -217,6 +217,7 @@ export const TeamIdentityView: React.FC<Props> = ({ onNavigate, validationAttemp
             <input
               id="team-name"
               type="text"
+              autoComplete="off"
               required
               value={formData.teamName}
               onChange={(e) => {
@@ -245,6 +246,7 @@ export const TeamIdentityView: React.FC<Props> = ({ onNavigate, validationAttemp
             <input
               id="school-name"
               type="text"
+              autoComplete="off"
               required
               value={formData.schoolName}
               onChange={(e) => {
@@ -322,6 +324,7 @@ export const TeamIdentityView: React.FC<Props> = ({ onNavigate, validationAttemp
                   <input
                     id={`member-name-${idx}`}
                     type="text"
+                    autoComplete="off"
                     required
                     value={member.name}
                     onChange={(e) => handleMemberNameChange(idx, e.target.value)}
@@ -344,6 +347,7 @@ export const TeamIdentityView: React.FC<Props> = ({ onNavigate, validationAttemp
                   </label>
                   <select
                     id={`member-role-${idx}`}
+                    autoComplete="off"
                     value={member.role}
                     onChange={(e) => handleMemberRoleChange(idx, e.target.value)}
                     className="box-border h-14 w-full min-w-0 px-4 bg-white border border-[#D8CFC8] rounded-lg text-sm lg:text-base font-medium text-[#3E2723] focus:outline-none focus:ring-2 focus:ring-[#FF913D]"
@@ -372,6 +376,7 @@ export const TeamIdentityView: React.FC<Props> = ({ onNavigate, validationAttemp
           </label>
           <textarea
             id="team-agreement"
+            autoComplete="off"
             value={formData.agreement}
             onChange={(e) => {
               setFormData({ ...formData, agreement: e.target.value });

@@ -208,6 +208,7 @@ export const PracticeQuestionsView: React.FC<Props> = ({ onNavigate }) => {
               1. Berapa nilai KPK dari {q.num1} dan {q.num2}?
             </label>
             <input
+              autoComplete="off"
               id="practice_kpk_input"
               type="text"
               inputMode="numeric"
@@ -226,6 +227,7 @@ export const PracticeQuestionsView: React.FC<Props> = ({ onNavigate }) => {
               2. Jawaban akhir ({q.unit === 'detik' ? 'Detik bersama' : 'Tanggal bersama berikutnya'}):
             </label>
             <input
+              autoComplete="off"
               id="practice_final_input"
               type="text"
               value={studentFinalAnswer}

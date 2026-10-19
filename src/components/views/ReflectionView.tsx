@@ -237,6 +237,7 @@ export const ReflectionView: React.FC<Props> = ({ onNavigate }) => {
             <textarea
               id={`reflection-${item.id}`}
               rows={6}
+              autoComplete="off"
               value={reflectionData[item.id] || ''}
               onChange={(e) => handleChange(item.id, e.target.value)}
               placeholder={item.placeholder}

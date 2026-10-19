@@ -351,6 +351,7 @@ export const PresentationView: React.FC<Props> = ({ onNavigate }) => {
                 1. Pelajaran Bermakna tentang Cara Kerja KPK:
               </label>
               <textarea
+                autoComplete="off"
                 rows={6}
                 value={reflectionInputs.lcmLearning}
                 onChange={(e) => handleReflectionChange('lcmLearning', e.target.value)}
@@ -364,6 +365,7 @@ export const PresentationView: React.FC<Props> = ({ onNavigate }) => {
                 2. Tantangan Terbesar & Solusi Tim:
               </label>
               <textarea
+                autoComplete="off"
                 rows={6}
                 value={reflectionInputs.challengingMission}
                 onChange={(e) => handleReflectionChange('challengingMission', e.target.value)}
@@ -515,6 +517,7 @@ export const PresentationView: React.FC<Props> = ({ onNavigate }) => {
           <span>Catatan Pembicara (Panduan Berbicara di Depan Kelas):</span>
         </div>
         <textarea
+          autoComplete="off"
           rows={6}
           value={speakerNote}
           onChange={(e) => {

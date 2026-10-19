@@ -422,6 +422,7 @@ export const MissionDetailView: React.FC<Props> = ({
                   <textarea
                     id={inputId}
                     rows={5}
+                    autoComplete="off"
                     value={val}
                     onChange={(e) =>
                       handleInputChange(activeStep, field.id, e.target.value)
@@ -434,6 +435,7 @@ export const MissionDetailView: React.FC<Props> = ({
                     <input
                       id={inputId}
                       type="text"
+                      autoComplete="off"
                       inputMode={field.type === 'number' ? 'numeric' : undefined}
                       value={val}
                       onChange={(e) =>
