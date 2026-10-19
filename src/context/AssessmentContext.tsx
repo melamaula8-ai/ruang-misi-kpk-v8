@@ -546,7 +546,7 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         const matchingSubmission = incomingSubmissions?.find((submission) =>
           submission.groupId === remoteToken.id && submission.groupCode?.toUpperCase() === remoteToken.code.toUpperCase()
         );
-        const claimedBySubmissionId = matchingSubmission?.id ||
+        const claimedBySubmissionId = remoteToken.claimedBySubmissionId || matchingSubmission?.id ||
           (remoteToken.status === 'claimed' && localToken?.status === 'claimed' ? localToken.claimedBySubmissionId : undefined);
         if (remoteToken.status !== 'claimed' || !claimedBySubmissionId) return remoteToken;
         return {
@@ -1022,7 +1022,7 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         setActiveSubmissionId(matchingSub.id);
         setActiveTokenCode(token.code);
         setGroupTokens((prev) => prev.map((item) => item.id === token.id
-          ? { ...item, status: 'claimed', claimedBySubmissionId: matchingSub.id, teamName: matchingSub.team.teamName || '' }
+          ? { ...item, status: 'claimed', claimedBySubmissionId: item.claimedBySubmissionId || matchingSub.id, teamName: matchingSub.team.teamName || '' }
           : item));
         return {
           success: true,
@@ -1035,14 +1035,19 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           const response = await fetch(`/api/sync?groupCode=${encodeURIComponent(code)}`, { headers: { Accept: 'application/json' }, cache: 'no-store' });
           if (response.ok) {
             const remote = await response.json();
-            const remoteSubmission = Array.isArray(remote.submissions)
-              ? remote.submissions.find((item: AssessmentSubmission) => item.groupCode?.toUpperCase() === code)
-              : null;
+            const remoteSubmissions = Array.isArray(remote.submissions)
+              ? remote.submissions.filter((item: AssessmentSubmission) => item.groupCode?.toUpperCase() === code)
+              : [];
+            const canonicalSubmissionId = token.claimedBySubmissionId;
+            const remoteSubmission = remoteSubmissions.find((item: AssessmentSubmission) => item.id === canonicalSubmissionId) || remoteSubmissions[0] || null;
             if (remoteSubmission) {
-              setAllSubmissions((prev) => [remoteSubmission, ...prev.filter((item) => item.id !== remoteSubmission.id && item.groupCode?.toUpperCase() !== code)]);
+              setAllSubmissions((prev) => [
+                ...remoteSubmissions,
+                ...prev.filter((item) => item.groupCode?.toUpperCase() !== code),
+              ]);
               setActiveSubmissionId(remoteSubmission.id);
               setActiveTokenCode(code);
-              setGroupTokens((prev) => prev.map((item) => item.id === token.id ? { ...item, status: 'claimed', claimedBySubmissionId: remoteSubmission.id, teamName: remoteSubmission.team.teamName } : item));
+              setGroupTokens((prev) => prev.map((item) => item.id === token.id ? { ...item, status: 'claimed', claimedBySubmissionId: item.claimedBySubmissionId || canonicalSubmissionId || remoteSubmission.id, teamName: remoteSubmission.team.teamName } : item));
               return { success: true, message: `Sesi ${remoteSubmission.team.teamName || 'kelompokmu'} ditemukan. Kamu dapat melanjutkan dari perangkat ini.`, isResume: true };
             }
           }
@@ -1220,19 +1225,55 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const currentTrack = activeSubmission.track;
 
   const setCurrentTrack = (track: LearningTrack) => {
-    if (trackLockConfig.isLocked && trackLockConfig.lockedTrack) {
+    const lockedTrack = trackLockConfig.lockedTrack || 'penjelajah';
+    const groupCode = activeTokenCode || activeSubmission.groupCode || '';
+    const completedStatuses = ['submitted_pending_review', 'time_expired_pending_review', 'reviewed', 'results_published'];
+    const lockedTrackCompleted = allSubmissions.some((submission) =>
+      submission.track === lockedTrack &&
+      (groupCode
+        ? submission.groupCode?.toUpperCase() === groupCode.toUpperCase()
+        : submission.id === activeSubmission.id) &&
+      completedStatuses.includes(submission.status)
+    );
+
+    if (trackLockConfig.isLocked && track !== lockedTrack && !lockedTrackCompleted) {
       return;
     }
-    const targetId = effectiveActiveId;
-    setAllSubmissions((prev) =>
-      prev.map((sub) => (sub.id === targetId ? { ...sub, track } : sub))
+    if (track === activeSubmission.track) return;
+
+    if (groupCode) {
+      const existingTrackSubmission = allSubmissions.find((submission) =>
+        submission.groupCode?.toUpperCase() === groupCode.toUpperCase() && submission.track === track
+      );
+      if (existingTrackSubmission) {
+        setActiveSubmissionId(existingTrackSubmission.id);
+      } else {
+        const freshSubmission = createFreshSubmission(activeSubmission.groupId, groupCode);
+        freshSubmission.classId = activeSubmission.classId;
+        freshSubmission.team = {
+          ...activeSubmission.team,
+          members: activeSubmission.team.members.map((member) => ({ ...member })),
+        };
+        freshSubmission.track = track;
+        setAllSubmissions((previous) => [freshSubmission, ...previous]);
+        setActiveSubmissionId(freshSubmission.id);
+      }
+      return;
+    }
+
+    setAllSubmissions((previous) =>
+      previous.map((submission) => submission.id === effectiveActiveId ? { ...submission, track } : submission)
     );
   };
 
   const updateTeamIdentity = (team: TeamIdentity) => {
     const targetId = effectiveActiveId;
     setAllSubmissions((prev) =>
-      prev.map((sub) => (sub.id === targetId ? { ...sub, team } : sub))
+      prev.map((sub) => (
+        sub.id === targetId || (activeTokenCode && sub.groupCode?.toUpperCase() === activeTokenCode.toUpperCase())
+          ? { ...sub, team: { ...team, members: team.members.map((member) => ({ ...member })) } }
+          : sub
+      ))
     );
 
     // Also update team name in groupToken if claimed

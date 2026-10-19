@@ -232,6 +232,15 @@ export const MissionDetailView: React.FC<Props> = ({
               Buka Kunci untuk Edit Jawaban
             </button>
           )}
+          {['submitted_pending_review', 'time_expired_pending_review', 'reviewed', 'results_published'].includes(activeSubmission.status) && (
+            <button
+              type="button"
+              onClick={() => onNavigate('pintu')}
+              className="px-3.5 py-1.5 bg-white hover:bg-[#FFF7DC] text-[#6F4736] text-xs font-bold rounded-xl border border-[#E8DFD8] transition-colors cursor-pointer shrink-0"
+            >
+              Pilih Pintu Lain
+            </button>
+          )}
         </div>
       )}
 

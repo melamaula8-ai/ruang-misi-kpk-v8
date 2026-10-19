@@ -285,7 +285,9 @@ const SQL = {
     VALUES (?, COALESCE((SELECT group_code FROM submissions WHERE id = ?), ?), ?)`,
   // Siswa hanya boleh menyimpan sesi yang (a) belum dihapus guru dan (b) memegang ID kelompoknya.
   upsertSubmissionStudent: `INSERT INTO submissions (id, group_code, data, updated_at, owner_id)
-    SELECT ?1, ?2, ?3, ?4, owner_id FROM group_tokens WHERE code = ?2 AND status = 'claimed' AND claimed_by = ?1
+    SELECT ?1, ?2, ?3, ?4, owner_id FROM group_tokens
+      WHERE code = ?2 AND status = 'claimed' AND json_extract(?3, '$.groupId') = id
+        AND (claimed_by = ?1 OR EXISTS (SELECT 1 FROM submissions WHERE group_code = ?2))
       AND NOT EXISTS (SELECT 1 FROM revoked_sessions WHERE submission_id = ?1)
     ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at WHERE submissions.owner_id = excluded.owner_id`,
   // Klaim atomik: hanya berhasil bila ID masih tersedia (atau sudah milik sesi yang sama) dan sesi belum dihapus.
@@ -295,7 +297,11 @@ const SQL = {
   releaseTokenOfDeleted: `UPDATE group_tokens
     SET status = 'available', claimed_by = NULL, updated_at = ?2,
         data = json_set(json_remove(data, '$.claimedAt', '$.claimedBySubmissionId', '$.teamName'), '$.status', 'available')
-    WHERE claimed_by = ?1 AND status = 'claimed'`,
+    WHERE claimed_by = ?1 AND status = 'claimed'
+      AND NOT EXISTS (
+        SELECT 1 FROM submissions
+        WHERE group_code = (SELECT group_code FROM revoked_sessions WHERE submission_id = ?1 LIMIT 1)
+      )`,
 };
 
 async function isRevoked(db: D1Like, submissionId: string): Promise<boolean> {
@@ -439,14 +445,24 @@ async function handlePost(request: Request, env: Env, teacherIdentity: string | 
       // Older teacher-issued tokens predate class metadata. Possession of the
       // exact stored token remains the authorization for those existing IDs.
       if (await isRevoked(db, sid)) throw new SyncError('SESSION_DELETED', 'Sesi ini telah dihapus oleh guru. Masukkan kembali ID kelompok untuk memulai sesi baru.', 409);
-      if (row.status === 'claimed' && row.claimed_by !== sid) throw new SyncError('TOKEN_CLAIMED', 'ID kelompok sudah dipakai kelompok lain.', 409);
+      const sessionClaim = await db.prepare("SELECT id FROM group_tokens WHERE status = 'claimed' AND claimed_by = ? LIMIT 1").bind(sid).first();
+      if (row.status === 'claimed' && row.claimed_by !== sid) {
+        const hasGroupSubmission = Boolean(await db.prepare('SELECT 1 AS x FROM submissions WHERE group_code = ? LIMIT 1').bind(code).first());
+        if (!hasGroupSubmission || (sessionClaim && sessionClaim.id !== incoming.id)) {
+          throw new SyncError('TOKEN_CLAIMED', 'ID kelompok sudah dipakai kelompok lain.', 409);
+        }
+      }
       // Hanya bidang klaim yang diambil dari siswa; catatan guru dan bidang lain tetap aman.
+      const canonicalSubmissionId = row.status === 'claimed' && typeof row.claimed_by === 'string' ? row.claimed_by : sid;
       const merged = {
-        ...old, status: 'claimed', claimedBySubmissionId: sid,
-        claimedAt: old.claimedAt && row.claimed_by === sid ? old.claimedAt : (incoming.claimedAt || new Date(now).toISOString()),
+        ...old, status: 'claimed', claimedBySubmissionId: canonicalSubmissionId,
+        claimedAt: old.claimedAt && row.status === 'claimed' ? old.claimedAt : (incoming.claimedAt || new Date(now).toISOString()),
         ...(typeof incoming.teamName === 'string' ? { teamName: incoming.teamName.slice(0, 200) } : {}),
       };
-      const res = await db.prepare(SQL.claimToken).bind(sid, JSON.stringify(merged), now, incoming.id).run();
+      const res = row.status === 'claimed' && row.claimed_by !== sid
+        ? await db.prepare("UPDATE group_tokens SET data = ?, updated_at = ? WHERE id = ? AND code = ? AND status = 'claimed' AND claimed_by = ?")
+            .bind(JSON.stringify(merged), now, incoming.id, code, canonicalSubmissionId).run()
+        : await db.prepare(SQL.claimToken).bind(sid, JSON.stringify(merged), now, incoming.id).run();
       if (!res.meta?.changes) {
         if (await isRevoked(db, sid)) throw new SyncError('SESSION_DELETED', 'Sesi ini telah dihapus oleh guru. Masukkan kembali ID kelompok untuk memulai sesi baru.', 409);
         throw new SyncError('TOKEN_CLAIMED', 'ID kelompok sudah dipakai kelompok lain.', 409);
@@ -459,7 +475,9 @@ async function handlePost(request: Request, env: Env, teacherIdentity: string | 
       if (await isRevoked(db, incoming.id)) throw new SyncError('SESSION_DELETED', 'Sesi ini telah dihapus oleh guru. Masukkan kembali ID kelompok untuk memulai sesi baru.', 409);
       const tokenRow = await db.prepare('SELECT id, status, claimed_by FROM group_tokens WHERE code = ?').bind(code).first();
       if (!tokenRow) throw new SyncError('TOKEN_MISSING', 'ID kelompok tidak terdaftar.', 409);
-      if (tokenRow.status !== 'claimed' || tokenRow.claimed_by !== incoming.id || incoming.groupId !== tokenRow.id) {
+      const hasGroupSubmission = Boolean(await db.prepare('SELECT 1 AS x FROM submissions WHERE group_code = ? LIMIT 1').bind(code).first());
+      const sessionClaim = await db.prepare("SELECT id FROM group_tokens WHERE status = 'claimed' AND claimed_by = ? LIMIT 1").bind(incoming.id).first();
+      if (tokenRow.status !== 'claimed' || incoming.groupId !== tokenRow.id || (tokenRow.claimed_by !== incoming.id && !hasGroupSubmission) || (sessionClaim && sessionClaim.id !== tokenRow.id)) {
         throw new SyncError('TOKEN_CLAIMED', 'ID kelompok belum diklaim oleh sesi ini.', 409);
       }
       const existingRow = await db.prepare('SELECT group_code, data FROM submissions WHERE id = ?').bind(incoming.id).first();

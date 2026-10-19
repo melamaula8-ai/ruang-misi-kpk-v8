@@ -13,7 +13,24 @@ interface Props {
 }
 
 export const TrackSelectionView: React.FC<Props> = ({ onNavigate }) => {
-  const { currentTrack, setCurrentTrack, trackLockConfig, learningContent } = useAssessment();
+  const { currentTrack, setCurrentTrack, trackLockConfig, learningContent, allSubmissions, activeSubmission } = useAssessment();
+  const activeTokenCode = activeSubmission.groupCode || '';
+  const lockedTrack = trackLockConfig.lockedTrack || 'penjelajah';
+  const completedStatuses = ['submitted_pending_review', 'time_expired_pending_review', 'reviewed', 'results_published'];
+  const lockedTrackCompleted = allSubmissions.some((submission) =>
+    submission.track === lockedTrack &&
+    (activeTokenCode
+      ? submission.groupCode?.toUpperCase() === activeTokenCode.toUpperCase()
+      : submission.id === activeSubmission.id) &&
+    completedStatuses.includes(submission.status)
+  );
+  const trackIsRestricted = (track: LearningTrack) =>
+    trackLockConfig.isLocked && track !== lockedTrack && !lockedTrackCompleted;
+  const getTrackSubmission = (track: LearningTrack) => allSubmissions.find((submission) =>
+    (activeTokenCode
+      ? submission.groupCode?.toUpperCase() === activeTokenCode.toUpperCase()
+      : submission.id === activeSubmission.id) && submission.track === track
+  );
 
   const tracks: Array<{
     id: LearningTrack;
@@ -84,11 +101,14 @@ export const TrackSelectionView: React.FC<Props> = ({ onNavigate }) => {
           {learningContent.published.instructions}
         </p>
 
-        {trackLockConfig.isLocked && (
+        {trackLockConfig.isLocked && !lockedTrackCompleted && (
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#FFE082]/40 border border-[#FFE082] text-xs font-bold text-[#6F4736]">
             <Lock className="w-3.5 h-3.5" />
-            <span>Pintu belajar saat ini ditetapkan oleh guru untuk kelompokmu.</span>
+            <span>Selesaikan dan kirim pintu {learningContent.published.tracks[lockedTrack].name} terlebih dahulu. Setelah itu, pintu lainnya dapat dipilih.</span>
           </div>
+        )}
+        {lockedTrackCompleted && (
+          <p className="text-xs font-bold text-[#4A671E]">Pintu {learningContent.published.tracks[lockedTrack].name} sudah dikirim. Kelompok kini dapat melanjutkan pintu lain.</p>
         )}
       </div>
 
@@ -96,6 +116,9 @@ export const TrackSelectionView: React.FC<Props> = ({ onNavigate }) => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
         {tracks.map((t) => {
           const isSelected = currentTrack === t.id;
+          const isRestricted = trackIsRestricted(t.id);
+          const trackSubmission = getTrackSubmission(t.id);
+          const isCompleted = Boolean(trackSubmission && completedStatuses.includes(trackSubmission.status));
           const Illustration = t.Illustration;
           const learningTrack = learningContent.published.tracks[t.id];
 
@@ -107,12 +130,17 @@ export const TrackSelectionView: React.FC<Props> = ({ onNavigate }) => {
                 isSelected
                   ? `${t.accentColor} ring-2 ring-[#FF913D] shadow-md`
                   : 'border-[#EAE3D9] hover:border-[#D8CFC8]'
-              } ${trackLockConfig.isLocked && !isSelected ? 'opacity-60 cursor-not-allowed' : ''}`}
+              } ${isRestricted && !isSelected ? 'opacity-60 cursor-not-allowed' : ''}`}
             >
               {isSelected && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#FF913D] text-white text-[11px] font-bold px-3 py-0.5 rounded-full shadow-xs flex items-center gap-1">
                   <Check className="w-3 h-3" />
                   <span>Pintu Terpilih</span>
+                </div>
+              )}
+              {isCompleted && (
+                <div className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full border border-[#C5E68A] bg-[#F4F9E9] px-2.5 py-1 text-[10px] font-extrabold text-[#4A671E]">
+                  <Check className="h-3 w-3" /> Sudah dikirim
                 </div>
               )}
 
@@ -152,7 +180,7 @@ export const TrackSelectionView: React.FC<Props> = ({ onNavigate }) => {
               <div className="pt-6 mt-4 border-t border-[#EAE3D9]">
                 <button
                   type="button"
-                  disabled={trackLockConfig.isLocked && !isSelected}
+                  disabled={isRestricted && !isSelected}
                   onClick={(e) => {
                     e.stopPropagation();
                     handleSelectTrack(t.id);
@@ -166,7 +194,7 @@ export const TrackSelectionView: React.FC<Props> = ({ onNavigate }) => {
                   {isSelected ? (
                     <>
                       <Calculator className="w-3.5 h-3.5" />
-                      <span>Aktif di Pintu Ini</span>
+                      <span>{isCompleted ? 'Lihat Pintu Ini' : 'Aktif di Pintu Ini'}</span>
                     </>
                   ) : (
                     <span>Pilih Pintu {learningTrack.name}</span>
@@ -181,7 +209,7 @@ export const TrackSelectionView: React.FC<Props> = ({ onNavigate }) => {
       {/* Action Footer */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white border border-[#EAE3D9] rounded-xl p-5">
         <div className="text-xs text-[#6D5A50]">
-          Pintu pilihanmu siap! Lanjutkan ke peta misi dan pilih tantangan yang ingin diselesaikan bersama tim.
+          Progres setiap pintu disimpan terpisah. Kelompok dapat kembali ke sini untuk melanjutkan pintu lainnya.
         </div>
         <button
           onClick={() => onNavigate('misi')}
