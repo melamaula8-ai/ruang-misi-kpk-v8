@@ -20,6 +20,10 @@ import {
 import { calculateLCM, addDaysToDate } from '../utils/math';
 
 interface AssessmentContextType {
+  validateStudentClassCode: (code: string) => Promise<{ success: boolean; message: string }>;
+  learningContent: LearningContentState;
+  saveLearningDraft: (draft: LearningContent) => Promise<{ success: boolean; message: string }>;
+  publishLearningDraft: (draft: LearningContent) => Promise<{ success: boolean; message: string }>;
   // Questions Bank
   questions: MissionQuestion[];
   updateQuestion: (updated: MissionQuestion) => void;
@@ -96,6 +100,29 @@ interface AssessmentContextType {
   sessionDeletedNotice: boolean;
   dismissSessionDeletedNotice: () => void;
 }
+
+export interface LearningContent {
+  objective: string;
+  materials: string;
+  instructions: string;
+  hints: string;
+  tracks: Record<LearningTrack, { name: string; material: string; cases: string; activity: string; difficulty: string }>;
+  questions: MissionQuestion[];
+}
+export interface LearningContentState { draft: LearningContent; published: LearningContent }
+
+const makeDefaultLearningContent = (bank: MissionQuestion[]): LearningContent => ({
+  objective: 'Menentukan KPK dari dua bilangan melalui masalah sehari-hari, menjelaskan strategi, dan memeriksa jawaban bersama tim.',
+  materials: 'Papan tulis atau kertas, pensil warna, tabel kelipatan, garis bilangan, dan kalender.',
+  instructions: 'Baca cerita dengan teliti, bagi peran dalam tim, tulis strategi pada empat tahap, lalu periksa jawaban sebelum dikirim.',
+  hints: 'Mulai dengan menuliskan kelipatan kedua bilangan. Cari bilangan pertama yang muncul pada kedua daftar.',
+  tracks: {
+    penjelajah: { name: 'Penjelajah', material: 'Tabel kelipatan berpandu dan contoh langkah.', cases: 'Jadwal piket, lampu lalu lintas, olahraga, dan agenda sekolah.', activity: 'Lengkapi pola kelipatan dengan petunjuk bertahap.', difficulty: 'Terbimbing' },
+    pengembang: { name: 'Pengembang', material: 'Ruang untuk menyusun daftar kelipatan dan strategi sendiri.', cases: 'Jadwal berulang dan kalender kegiatan sekolah.', activity: 'Pilih strategi kelompok dan jelaskan cara menemukan KPK.', difficulty: 'Mandiri dengan refleksi' },
+    inovator: { name: 'Inovator', material: 'Lembar investigasi terbuka untuk pembuktian strategi.', cases: 'Kasus jadwal dengan penalaran dan tanggal yang lebih menantang.', activity: 'Buktikan hasil, periksa minimalitas KPK, dan bandingkan strategi.', difficulty: 'Tantangan' },
+  },
+  questions: bank,
+});
 
 const DEFAULT_TEAM: TeamIdentity = {
   teamName: '',
@@ -213,6 +240,10 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       if (stored) return migrateInnovatorProblemAnalysis(JSON.parse(stored));
     } catch {}
     return INITIAL_QUESTION_BANK;
+  });
+  const [learningContent, setLearningContent] = useState<LearningContentState>(() => {
+    const initial = makeDefaultLearningContent(INITIAL_QUESTION_BANK);
+    return { draft: initial, published: initial };
   });
 
   // Track Lock Config
@@ -383,6 +414,43 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     if (token) headers.Authorization = `Bearer ${token}`;
     return headers;
   };
+  const persistLearningContent = async (draft: LearningContent, publish: boolean) => {
+    if (!isTeacherLoggedIn) return { success: false, message: 'Masuk sebagai guru untuk mengubah materi.' };
+    if (cloudStatus !== 'online') return { success: false, message: 'Database belum terhubung. Perubahan belum tersimpan.' };
+    const next: LearningContentState = {
+      draft,
+      published: publish ? draft : learningContent.published,
+    };
+    try {
+      const response = await fetch('/api/sync', {
+        method: 'POST',
+        headers: cloudHeaders(true),
+        body: JSON.stringify({ settings: { learningContent: next } }),
+      });
+      const result = await response.json().catch(() => ({} as { error?: string }));
+      if (!response.ok) return { success: false, message: result.error || 'Materi gagal disimpan ke server.' };
+      setLearningContent(next);
+      if (publish) setQuestions(draft.questions);
+      setCloudStatus('online');
+      return { success: true, message: publish ? 'Materi berhasil dipublikasikan untuk murid.' : 'Draf materi berhasil disimpan.' };
+    } catch {
+      setCloudStatus('offline');
+      return { success: false, message: 'Koneksi terputus. Perubahan belum tersimpan.' };
+    }
+  };
+  const validateStudentClassCode = async (code: string) => {
+    const normalized = code.trim().toUpperCase();
+    if (!normalized) return { success: false, message: 'Masukkan kode kelas dari gurumu.' };
+    try {
+      const response = await fetch(`/api/classes?code=${encodeURIComponent(normalized)}`, { headers: { Accept: 'application/json' }, cache: 'no-store' });
+      const data = await response.json().catch(() => ({} as { error?: string }));
+      return response.ok
+        ? { success: true, message: 'Kode kelas berhasil diverifikasi.' }
+        : { success: false, message: data.error || 'Kode kelas tidak dapat diverifikasi.' };
+    } catch {
+      return { success: false, message: 'Tidak dapat terhubung ke server. Periksa koneksi lalu coba lagi.' };
+    }
+  };
   const cloudUrl = () => {
     if (!isTeacherLoggedIn && activeTokenCode) {
       return `/api/sync?groupCode=${encodeURIComponent(activeTokenCode)}&sessionId=${encodeURIComponent(activeSubmissionId)}`;
@@ -405,7 +473,7 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const buildSnapshot = (overrides?: {
     tokens?: GroupToken[]; submissions?: AssessmentSubmission[]; questions?: MissionQuestion[];
-    trackLock?: { isLocked: boolean; lockedTrack: LearningTrack | null }; rubric?: RubricConfig; logo?: string | null;
+    trackLock?: { isLocked: boolean; lockedTrack: LearningTrack | null }; rubric?: RubricConfig; logo?: string | null; learningContent?: LearningContentState;
   }) => {
     const rows = overrides?.submissions ?? allSubmissions;
     const settings: Record<string, unknown> = {
@@ -414,6 +482,7 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       customLogo: overrides?.logo !== undefined ? overrides.logo : customLogoUrl,
     };
     if (isTeacherLoggedIn) settings.rubric = overrides?.rubric ?? rubricConfig;
+    if (isTeacherLoggedIn) settings.learningContent = overrides?.learningContent ?? learningContent;
     return JSON.stringify({
       tokens: overrides?.tokens ?? groupTokens,
       submissions: isTeacherLoggedIn ? rows : rows.filter((row) => activeTokenCode && row.groupCode?.toUpperCase() === activeTokenCode.toUpperCase()),
@@ -423,13 +492,28 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const applyCloudData = (data: any) => {
     applyingRemote.current = true;
-    const incomingQuestions =
-      Array.isArray(data.settings?.questions) && data.settings.questions.length
-        ? migrateInnovatorProblemAnalysis(data.settings.questions)
-        : questions;
+    const publishedBank = data.settings?.learningContent?.published?.questions ?? data.settings?.learningContent?.questions;
+    const remoteBank = Array.isArray(publishedBank) ? publishedBank : data.settings?.questions;
+    const incomingQuestions = Array.isArray(remoteBank) && remoteBank.length
+      ? migrateInnovatorProblemAnalysis(remoteBank)
+      : questions;
     const incomingSubmissions = Array.isArray(data.submissions)
       ? migrateInnovatorProblemAnswers(data.submissions)
       : null;
+    const incomingLearning = data.settings?.learningContent as LearningContentState | undefined;
+    if (incomingLearning?.draft && incomingLearning?.published) {
+      setLearningContent(incomingLearning);
+      const publishedQuestions = incomingLearning.published.questions;
+      if (Array.isArray(publishedQuestions) && publishedQuestions.length) setQuestions(migrateInnovatorProblemAnalysis(publishedQuestions));
+    } else if (!isTeacherLoggedIn && Array.isArray(data.settings?.learningContent?.questions)) {
+      const publicContent = data.settings.learningContent as LearningContent;
+      setLearningContent({ draft: publicContent, published: publicContent });
+      if (publicContent.questions.length) setQuestions(migrateInnovatorProblemAnalysis(publicContent.questions));
+    } else if (Array.isArray(data.settings?.questions) && data.settings.questions.length) {
+      const migratedQuestions = migrateInnovatorProblemAnalysis(data.settings.questions);
+      const seeded = makeDefaultLearningContent(migratedQuestions);
+      setLearningContent({ draft: seeded, published: seeded });
+    }
     if (Array.isArray(data.tokens)) setGroupTokens(data.tokens);
     if (incomingSubmissions) {
       // Server memastikan lewat `sessionRevoked`. Menebak dari status ID kelompok bisa salah
@@ -475,6 +559,9 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       trackLock: data.settings?.trackLock ?? trackLockConfig,
       rubric: data.settings?.rubric ?? rubricConfig,
       logo: data.settings && 'customLogo' in data.settings ? data.settings.customLogo : customLogoUrl,
+      learningContent: incomingLearning ?? (Array.isArray(data.settings?.questions) && data.settings.questions.length
+        ? { draft: makeDefaultLearningContent(migrateInnovatorProblemAnalysis(data.settings.questions)), published: makeDefaultLearningContent(migrateInnovatorProblemAnalysis(data.settings.questions)) }
+        : learningContent),
     });
     lastPushedSnapshot.current = snapshot;
     lastRemoteSnapshot.current = JSON.stringify(data);
@@ -539,7 +626,7 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         const previousSubs = byId(previous.submissions || []), currentSubs = byId(current.submissions || []);
         const changed = (a: any, b: any) => JSON.stringify(a) !== JSON.stringify(b);
         const settings: Record<string, unknown> = {};
-        for (const key of ['questions', 'trackLock', 'rubric', 'customLogo']) {
+        for (const key of ['questions', 'trackLock', 'rubric', 'customLogo', 'learningContent']) {
           if (changed(previous.settings?.[key], current.settings?.[key])) settings[key] = current.settings?.[key] ?? null;
         }
         const payload = {
@@ -569,7 +656,7 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }, 1000);
     return () => window.clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cloudReady, groupTokens, allSubmissions, questions, trackLockConfig, rubricConfig, customLogoUrl]);
+  }, [cloudReady, groupTokens, allSubmissions, questions, trackLockConfig, rubricConfig, customLogoUrl, learningContent]);
 
   // Tarik perubahan dari perangkat lain. Siswa cukup tiap 8 detik, guru tiap 5 detik, dan tab yang
   // tersembunyi tidak ikut menarik data (menghemat kuota gratis Cloudflare dan data seluler siswa).
@@ -1668,6 +1755,10 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   return (
     <AssessmentContext.Provider
       value={{
+        validateStudentClassCode,
+        learningContent,
+        saveLearningDraft: (draft) => persistLearningContent(draft, false),
+        publishLearningDraft: (draft) => persistLearningContent(draft, true),
         questions,
         updateQuestion,
         resetQuestionsToDefault,

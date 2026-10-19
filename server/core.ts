@@ -223,8 +223,8 @@ export async function handleGroupToken(request: Request, env: Env): Promise<Resp
 
 // ---------------------------------------------------------------- sinkronisasi
 type Row = { id: string; [key: string]: unknown };
-const SETTINGS_KEYS = new Set(['questions', 'trackLock', 'rubric', 'customLogo']);
-const PUBLIC_SETTINGS = ['questions', 'trackLock', 'customLogo'];
+const SETTINGS_KEYS = new Set(['questions', 'trackLock', 'rubric', 'customLogo', 'learningContent']);
+const PUBLIC_SETTINGS = ['questions', 'trackLock', 'customLogo', 'learningContent'];
 const STUDENT_STATUSES = new Set(['in_progress', 'submitted_pending_review', 'time_expired_pending_review']);
 const MAX_ROWS_PER_REQUEST = 500;
 
@@ -306,6 +306,14 @@ async function handleGet(request: Request, env: Env, teacherIdentity: string | n
   const publicTokens = groupCode ? tokens.filter((d: any) => upper(d.code) === groupCode).map((d: any) => ({ id: d.id, code: d.code, status: d.status, createdAt: d.createdAt })) : [];
   const publicSettings: Record<string, unknown> = {};
   for (const key of PUBLIC_SETTINGS) if (key in settings) publicSettings[key] = settings[key];
+  const learningContent = settings.learningContent as any;
+  if (learningContent && typeof learningContent === 'object') {
+    if (learningContent.published && typeof learningContent.published === 'object') {
+      publicSettings.learningContent = learningContent.published;
+    } else {
+      delete publicSettings.learningContent;
+    }
+  }
   const body: Record<string, unknown> = {
     initialized: tokens.length > 0 || legacySettingRows.results.length > 0 || ownerSettingRows.results.length > 0 || classRows.results.length > 0,
     tokens: publicTokens, submissions: safeOwn, settings: publicSettings,

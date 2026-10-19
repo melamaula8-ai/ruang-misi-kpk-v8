@@ -34,6 +34,7 @@ export const MissionDetailView: React.FC<Props> = ({
 }) => {
   const {
     currentTrack,
+    learningContent,
     questions,
     activeSubmission,
     updateMissionAnswer,
@@ -243,6 +244,7 @@ export const MissionDetailView: React.FC<Props> = ({
             <p className="text-sm text-[#4A3931] leading-relaxed whitespace-pre-line bg-[#FAF8F5] p-4 rounded-xl border border-[#EAE3D9] font-medium">
               {question.story}
             </p>
+            <p className="rounded-xl border border-[#DCE9C6] bg-[#F4F9E9] p-3 text-sm leading-6 text-[#42631D]"><strong>Petunjuk guru:</strong> {learningContent.published.instructions}</p>
           </div>
 
           <div className="md:col-span-4 flex justify-center">

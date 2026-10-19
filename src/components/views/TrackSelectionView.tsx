@@ -13,7 +13,7 @@ interface Props {
 }
 
 export const TrackSelectionView: React.FC<Props> = ({ onNavigate }) => {
-  const { currentTrack, setCurrentTrack, trackLockConfig } = useAssessment();
+  const { currentTrack, setCurrentTrack, trackLockConfig, learningContent } = useAssessment();
 
   const tracks: Array<{
     id: LearningTrack;
@@ -81,7 +81,7 @@ export const TrackSelectionView: React.FC<Props> = ({ onNavigate }) => {
           Pilih Pintu Misi Belajarmu
         </h1>
         <p className="text-sm text-[#5D4E46] leading-relaxed">
-          Semua pintu mempelajari materi KPK yang sama pada 4 situasi sekolah nyata. Pilih pintu petualangan yang paling mendukung caramu belajar hari ini!
+          {learningContent.published.instructions}
         </p>
 
         {trackLockConfig.isLocked && (
@@ -97,6 +97,7 @@ export const TrackSelectionView: React.FC<Props> = ({ onNavigate }) => {
         {tracks.map((t) => {
           const isSelected = currentTrack === t.id;
           const Illustration = t.Illustration;
+          const learningTrack = learningContent.published.tracks[t.id];
 
           return (
             <div
@@ -119,7 +120,7 @@ export const TrackSelectionView: React.FC<Props> = ({ onNavigate }) => {
                 {/* Visual Icon Illustration */}
                 <div className="flex items-center justify-between">
                   <span className={`px-2.5 py-1 rounded-md text-xs font-extrabold uppercase ${t.badgeBg} ${t.badgeText}`}>
-                    Pintu {t.title}
+                    Pintu {learningTrack.name}
                   </span>
                   <div className="w-16 h-16 flex items-center justify-center">
                     <Illustration className="w-14 h-14" />
@@ -127,14 +128,15 @@ export const TrackSelectionView: React.FC<Props> = ({ onNavigate }) => {
                 </div>
 
                 <div>
-                  <h3 className="text-xl font-bold text-[#3E2723]">{t.title}</h3>
+                  <h3 className="text-xl font-bold text-[#3E2723]">{learningTrack.name}</h3>
+                  <span className="mt-1 inline-flex rounded-full bg-[#FFF7DC] px-2.5 py-1 text-xs font-black text-[#8C6D1F]">Tingkat: {learningTrack.difficulty}</span>
                   <p className="text-xs font-semibold text-[#95634F] italic mt-0.5">
                     “{t.tagline}”
                   </p>
                 </div>
 
                 <p className="text-xs text-[#5D4E46] leading-relaxed">
-                  {t.description}
+                    {learningTrack.material}
                 </p>
 
                 <div className="bg-[#FAF8F5] border border-[#EAE3D9] rounded-xl p-3 text-xs space-y-1">
@@ -142,7 +144,7 @@ export const TrackSelectionView: React.FC<Props> = ({ onNavigate }) => {
                     Bentuk Bantuan:
                   </span>
                   <p className="text-[#6D5A50] text-[11px] leading-relaxed">
-                    {t.supportStyle}
+                    {learningTrack.activity} · {learningTrack.cases}
                   </p>
                 </div>
               </div>
@@ -167,7 +169,7 @@ export const TrackSelectionView: React.FC<Props> = ({ onNavigate }) => {
                       <span>Aktif di Pintu Ini</span>
                     </>
                   ) : (
-                    <span>Pilih Pintu {t.title}</span>
+                    <span>Pilih Pintu {learningTrack.name}</span>
                   )}
                 </button>
               </div>
@@ -179,13 +181,13 @@ export const TrackSelectionView: React.FC<Props> = ({ onNavigate }) => {
       {/* Action Footer */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white border border-[#EAE3D9] rounded-xl p-5">
         <div className="text-xs text-[#6D5A50]">
-          Setelah memilih pintu, lanjutkan dengan melengkapi identitas kelompok dan pembagian peran anggota tim.
+          Pintu pilihanmu siap! Lanjutkan ke peta misi dan pilih tantangan yang ingin diselesaikan bersama tim.
         </div>
         <button
-          onClick={() => onNavigate('identitas')}
+          onClick={() => onNavigate('misi')}
           className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-[#FF913D] hover:bg-[#F2822B] text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
         >
-          <span>Lanjut ke Identitas Tim</span>
+          <span>Masuk ke Peta Misi</span>
           <ArrowRight className="w-4 h-4" />
         </button>
       </div>

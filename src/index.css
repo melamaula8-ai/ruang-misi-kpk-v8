@@ -108,3 +108,49 @@ button { min-height: 2.65rem; }
 @keyframes gentle-number-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
 .math-number-strip { animation: gentle-number-bob 4s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .math-number-strip { animation: none !important; } }
+
+/* Consistent, touch friendly presentation across student, teacher and modal views. */
+html { scroll-behavior: smooth; }
+body { min-width: 320px; overflow-x: hidden; }
+img, svg, video, canvas { max-width: 100%; }
+button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 3px solid #FF913D;
+  outline-offset: 3px;
+}
+main > .max-w-6xl, main > .max-w-5xl, main > .teacher-dashboard-page,
+.adventure-page, .teacher-dashboard-page {
+  animation: learning-enter .38s ease-out both;
+}
+.adventure-page > section:not(.practice-hero):not(.identity-hero):not(.mission-hub-hero):not(.track-selection-hero),
+.teacher-dashboard-page section,
+.teacher-dashboard-page article {
+  min-width: 0;
+}
+.adventure-page input, .adventure-page textarea, .adventure-page select,
+.teacher-dashboard-page input, .teacher-dashboard-page textarea, .teacher-dashboard-page select {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+.role-landing { min-height: 100svh; }
+.role-landing > div { min-width: 0; }
+.role-choice { overflow-wrap: anywhere; }
+.learning-card, .practice-question-card, .class-access-card,
+.mission-hub-hero, .identity-hero, .track-selection-hero { min-width: 0; }
+@media (max-width: 767px) {
+  .adventure-page { padding-left: 1rem; padding-right: 1rem; padding-bottom: 2.5rem; gap: 1.25rem; }
+  .adventure-page > section, .teacher-dashboard-page section { border-radius: 1.25rem; }
+  .teacher-dashboard-page { padding-left: 1rem; padding-right: 1rem; }
+  .role-landing { padding-top: max(1.5rem, env(safe-area-inset-top)); padding-bottom: max(1.5rem, env(safe-area-inset-bottom)); }
+  .role-landing section { border-radius: 1.5rem; }
+  .role-landing h1 { overflow-wrap: anywhere; }
+  .practice-question-card { padding: 1rem; }
+  .practice-question-card [class*="grid-cols-"] { grid-template-columns: minmax(0, 1fr); }
+  table { display: block; max-width: 100%; overflow-x: auto; }
+}
+@media (max-width: 420px) {
+  .role-landing .math-float-card { right: .5rem; top: 2.25rem; transform: scale(.86); transform-origin: top right; }
+  .role-landing .math-number-strip { left: .5rem; bottom: 5rem; transform: scale(.9) rotate(-3deg); transform-origin: bottom left; }
+  .role-landing .landing-shell { border-radius: 1.25rem; }
+}

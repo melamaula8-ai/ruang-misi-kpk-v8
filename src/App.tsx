@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { House } from 'lucide-react';
+import { House, Volume2, VolumeX } from 'lucide-react';
 import { AssessmentProvider, useAssessment } from './context/AssessmentContext';
 import { isTeamIdentityComplete } from './utils/teamIdentity';
 import { Navbar } from './components/layout/Navbar';
@@ -17,7 +17,7 @@ import { ClassAccessView } from './components/views/ClassAccessView';
 import { SchoolHeroIllustration } from './components/illustrations/Illustrations';
 import { soundManager } from './utils/sound';
 
-function BackgroundMusic({ active }: { active: boolean }) {
+function BackgroundMusic({ active, enabled }: { active: boolean; enabled: boolean }) {
   const audioRef = React.useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
@@ -25,7 +25,7 @@ function BackgroundMusic({ active }: { active: boolean }) {
     if (!audio) return;
 
     audio.volume = 0.14;
-    if (!active) {
+    if (!active || !enabled) {
       audio.pause();
       return;
     }
@@ -56,7 +56,7 @@ function BackgroundMusic({ active }: { active: boolean }) {
       window.removeEventListener('keydown', resumeAfterInteraction);
       window.removeEventListener('touchstart', resumeAfterInteraction);
     };
-  }, [active]);
+  }, [active, enabled]);
 
   return <audio ref={audioRef} src="/music/musik-latar.mp3" loop preload="auto" autoPlay aria-hidden="true" />;
 }
@@ -79,6 +79,9 @@ function MainApp() {
     try { const params = new URLSearchParams(window.location.search); return (params.get('kelas') || params.get('class') || params.get('token') || '').trim().toUpperCase(); } catch { return ''; }
   });
   const [identityValidationAttempt, setIdentityValidationAttempt] = useState(0);
+  const [musicEnabled, setMusicEnabled] = useState(true);
+  const [musicBlockedForPractice, setMusicBlockedForPractice] = useState(false);
+  const [hasEnteredMissionMap, setHasEnteredMissionMap] = useState(false);
 
   // Halaman yang hanya boleh dibuka siswa yang sudah memverifikasi ID Kelompok.
   const STUDENT_SESSION_VIEWS = ['pintu', 'identitas', 'misi', 'misi-detail'];
@@ -125,10 +128,12 @@ function MainApp() {
 
   const handleNavigate = (view: string, identityValidated = false) => {
     soundManager.playClick();
+    if (view === 'gabung-kelas') view = 'kelas';
     if (view === 'halaman-utama') {
       setIsLoginModalOpen(false);
       setCurrentView('beranda');
       setShowRoleLanding(true);
+      setMusicBlockedForPractice(false);
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
@@ -142,6 +147,14 @@ function MainApp() {
       setCurrentView('kelas');
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
+    }
+    if (['misi', 'misi-detail'].includes(view) && !hasEnteredMissionMap) {
+      if (currentView !== 'pintu') {
+        setCurrentView('pintu');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+      setHasEnteredMissionMap(true);
     }
     // Rute lama Presentasi dan Refleksi diarahkan ke halaman Hasil.
     if (view === 'presentasi' || view === 'refleksi') {
@@ -159,6 +172,7 @@ function MainApp() {
       return;
     }
 
+    if (view === 'latihan') setMusicBlockedForPractice(true);
     setCurrentView(view);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -180,7 +194,13 @@ function MainApp() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#FAF8F5] text-[#2D231E]">
-      <BackgroundMusic active={showRoleLanding || currentView === 'beranda'} />
+      <BackgroundMusic active={!musicBlockedForPractice && (showRoleLanding || currentView === 'beranda')} enabled={musicEnabled} />
+      {(showRoleLanding || currentView === 'beranda') && (
+        <button type="button" onClick={() => setMusicEnabled((enabled) => !enabled)} aria-label={musicEnabled ? 'Matikan musik latar' : 'Nyalakan musik latar'} title={musicEnabled ? 'Matikan musik latar' : 'Nyalakan musik latar'} className="fixed bottom-5 right-4 z-50 inline-flex min-h-12 items-center gap-2 rounded-full border-2 border-white bg-[#3E2723] px-4 text-sm font-extrabold text-white shadow-xl transition hover:-translate-y-1 sm:bottom-7 sm:right-7">
+          {musicEnabled ? <Volume2 size={18} className="text-[#FFE082]" /> : <VolumeX size={18} />}
+          <span>{musicEnabled ? 'Musik ON' : 'Musik OFF'}</span>
+        </button>
+      )}
       {/* Landing page sengaja hanya menampilkan pilihan peran. */}
       {!showRoleLanding && (
         <>

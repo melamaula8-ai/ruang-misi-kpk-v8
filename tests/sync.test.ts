@@ -73,6 +73,21 @@ test('GET publik tidak membocorkan jawaban/penilaian kelompok lain', async () =>
   assert.equal(own.body.submissions[0].evaluation, undefined, 'nilai belum dipublikasikan harus disembunyikan');
 });
 
+test('draf pembelajaran hanya terlihat oleh guru pemilik; murid menerima versi yang dipublikasikan', async () => {
+  const env = makeEnv(); const t = await seed(env);
+  const content = {
+    draft: { objective: 'TUJUAN DRAF RAHASIA', questions: [{ id: 'draft-question' }] },
+    published: { objective: 'TUJUAN TERBIT', questions: [{ id: 'published-question' }] },
+  };
+  assert.equal((await call(env, 'POST', { token: t, body: { settings: { learningContent: content } } })).status, 200);
+  assert.equal((await call(env, 'POST', { body: { settings: { learningContent: content } } })).status, 403);
+  const teacherData = await call(env, 'GET', { token: t });
+  assert.equal(teacherData.body.settings.learningContent.draft.objective, 'TUJUAN DRAF RAHASIA');
+  const studentData = await call(env, 'GET', { query: '?groupCode=KPK-1A-91' });
+  assert.deepEqual(studentData.body.settings.learningContent, content.published);
+  assert.equal(JSON.stringify(studentData.body).includes('TUJUAN DRAF RAHASIA'), false);
+});
+
 test('dua siswa berebut ID yang sama secara bersamaan: tepat satu menang', async () => {
   const env = makeEnv(); await seed(env);
   const tok = { id: 'tok_1', code: 'KPK-1A-91' };

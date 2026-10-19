@@ -1,6 +1,6 @@
 import { issueTeacherToken, type Env } from './core';
 const encoder = new TextEncoder();
-const ITERATIONS = 210000;
+const ITERATIONS = 100000;
 const SESSION_TTL_SECONDS = 8 * 60 * 60;
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' } });
 const b64 = (bytes: Uint8Array) => { let raw = ''; for (const b of bytes) raw += String.fromCharCode(b); return btoa(raw).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, ''); };
@@ -111,7 +111,7 @@ export async function handleTeacherRegister(request: Request, env: Env): Promise
     return json({ token: await issueTeacherToken(env, username), expiresIn: SESSION_TTL_SECONDS, username }, 201);
   } catch (error) {
     if (/unique|constraint/i.test(String(error))) return json({ error: 'Akun Google atau username sudah terdaftar.' }, 409);
-    console.error('[teacher-register] gagal menyimpan akun');
+    console.error('[teacher-register] gagal menyimpan akun:', String(error));
     if (isMissingTable(error)) return json({ error: MIGRATION_HINT }, 503);
     return json({ error: 'Akun belum dapat disimpan. Coba lagi beberapa saat.' }, 500);
   }

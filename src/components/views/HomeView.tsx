@@ -9,7 +9,7 @@ interface Props {
 }
 
 export const HomeView: React.FC<Props> = ({ onNavigate }) => {
-  const { currentTrack, activeSubmission, customLogoUrl } = useAssessment();
+  const { currentTrack, activeSubmission, customLogoUrl, learningContent } = useAssessment();
 
   const polyaSteps = [
     {
@@ -111,7 +111,8 @@ export const HomeView: React.FC<Props> = ({ onNavigate }) => {
           <div className="flex-1">
             <span className="text-xs font-black uppercase tracking-[.16em] text-[#5A7A27]">Peta Belajar Hari Ini</span>
             <h2 className="mt-1 text-2xl font-black text-[#3E2723]">Tujuan pembelajaran</h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-[#5D4E46]">Melalui masalah sehari-hari, kamu akan menentukan KPK dari dua bilangan, menyusun strategi penyelesaian, menjelaskan langkah berpikir, dan memeriksa kembali jawaban bersama tim.</p>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-[#5D4E46]">{learningContent.published.objective}</p>
+            <p className="mt-3 max-w-3xl rounded-xl bg-white/80 px-4 py-3 text-sm leading-6 text-[#6D5A50]"><strong>Siapkan alat belajar:</strong> {learningContent.published.materials}<br/><strong>Petunjuk awal:</strong> {learningContent.published.hints}</p>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
             <span className="rounded-full border border-[#DCE9C6] bg-white px-3 py-1.5 text-xs font-bold text-[#4A671E]">Pahami</span>
@@ -230,4 +231,3 @@ export const HomeView: React.FC<Props> = ({ onNavigate }) => {
     </div>
   );
 };
-

@@ -33,6 +33,7 @@ import {
   FullEvaluation,
 } from '../../types';
 import { useAssessment } from '../../context/AssessmentContext';
+import type { LearningContent } from '../../context/AssessmentContext';
 import { calculateLCM, addDaysToDate, checkSimilarity } from '../../utils/math';
 import { exportAssessmentToExcel } from '../../utils/excelExport';
 
@@ -66,10 +67,13 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
     toggleGroupTokenStatus,
     deleteGroupToken,
     cloudStatus,
+    learningContent,
+    saveLearningDraft,
+    publishLearningDraft,
   } = useAssessment();
 
   const [activeTab, setActiveTab] = useState<
-    'ringkasan' | 'penilaian' | 'kelompok' | 'akses_kelas' | 'bank_soal' | 'rubrik' | 'rekap'
+    'ringkasan' | 'penilaian' | 'kelompok' | 'akses_kelas' | 'editor' | 'bank_soal' | 'rubrik' | 'rekap'
   >('ringkasan');
 
   // Currently selected submission for grading
@@ -120,6 +124,13 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
 
   // Question Bank Editing State
   const [editingQuestion, setEditingQuestion] = useState<MissionQuestion | null>(null);
+  const [editorDraft, setEditorDraft] = useState<LearningContent>(learningContent.draft);
+  const [editorNotice, setEditorNotice] = useState('');
+  const [editorBusy, setEditorBusy] = useState(false);
+  const [previewLearning, setPreviewLearning] = useState(false);
+  const [editorTrack, setEditorTrack] = useState<LearningTrack>('penjelajah');
+  const [editorQuestionId, setEditorQuestionId] = useState('');
+  React.useEffect(() => { setEditorDraft(learningContent.draft); }, [learningContent.draft]);
 
   // Group Management State
   const [newGroupModalOpen, setNewGroupModalOpen] = useState(false);
@@ -306,6 +317,50 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
     document.body.removeChild(link);
   };
 
+  const editorQuestions = editorDraft.questions;
+  const selectedEditorQuestion = editorQuestions.find((question) => question.id === editorQuestionId) || editorQuestions.find((question) => question.track === editorTrack) || editorQuestions[0];
+  const patchEditorQuestion = (questionId: string, patch: Partial<MissionQuestion>) => {
+    setEditorDraft((draft) => ({ ...draft, questions: draft.questions.map((question) => question.id === questionId ? { ...question, ...patch } : question) }));
+  };
+  const handleAddEditorQuestion = () => {
+    const base = editorQuestions.find((question) => question.track === editorTrack) || editorQuestions[0];
+    if (!base) return;
+    const id = `editor_${editorTrack}_${Date.now()}`;
+    const added: MissionQuestion = { ...base, id, title: `Soal baru · ${editorDraft.tracks[editorTrack].name}`, story: '', num1: 2, num2: 3, internalKey: { ...base.internalKey, kpk: 6, finalAnswer: '6' } };
+    setEditorDraft((draft) => ({ ...draft, questions: [...draft.questions, added] }));
+    setEditorQuestionId(id);
+  };
+  const moveEditorQuestion = (questionId: string, direction: -1 | 1) => {
+    setEditorDraft((draft) => {
+      const from = draft.questions.findIndex((question) => question.id === questionId);
+      const to = from + direction;
+      if (from < 0 || to < 0 || to >= draft.questions.length) return draft;
+      const questions = [...draft.questions];
+      [questions[from], questions[to]] = [questions[to], questions[from]];
+      return { ...draft, questions };
+    });
+  };
+  const saveEditor = async (publish: boolean) => {
+    const preparedDraft: LearningContent = {
+      ...editorDraft,
+      questions: editorDraft.questions.map((question) => {
+        const kpk = calculateLCM(question.num1, question.num2);
+        const finalAnswer = question.startDate
+          ? addDaysToDate(question.startDate, kpk).formatted
+          : question.unit === 'detik'
+            ? `${kpk} detik`
+            : question.internalKey.finalAnswer;
+        return { ...question, internalKey: { ...question.internalKey, kpk, finalAnswer } };
+      }),
+    };
+    setEditorDraft(preparedDraft);
+    setEditorBusy(true);
+    setEditorNotice('Menyimpan ke server…');
+    const result = publish ? await publishLearningDraft(preparedDraft) : await saveLearningDraft(preparedDraft);
+    setEditorBusy(false);
+    setEditorNotice(result.message);
+  };
+
   return (
     <div className="teacher-dashboard-page max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8">
       {/* Header with App/School Logo and Quick Change */}
@@ -389,6 +444,7 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
           { id: 'penilaian' as const, label: 'Pemeriksaan & Rubrik', icon: Award },
           { id: 'kelompok' as const, label: 'Data Kelompok & Pintu', icon: Users },
           { id: 'akses_kelas' as const, label: 'Buat ID / Link Kelas', icon: KeyRound },
+          { id: 'editor' as const, label: 'Editor Pembelajaran', icon: BookOpen },
           { id: 'bank_soal' as const, label: 'Bank Soal 12 Variasi', icon: Edit },
           { id: 'rubrik' as const, label: 'Pengaturan Bobot Rubrik', icon: Sliders },
           { id: 'rekap' as const, label: 'Rekap Nilai & Ekspor', icon: Download },
@@ -1192,6 +1248,51 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
               ))}
             </div>
           </div>
+        </div>
+      )}
+
+      {activeTab === 'editor' && (
+        <div className="space-y-6">
+          <section className="rounded-3xl border border-[#DCE9C6] bg-gradient-to-br from-[#F4F9E9] via-white to-[#FFF7DC] p-5 shadow-sm sm:p-8">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div><span className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-[#4A671E] shadow-sm">RUANG KREASI GURU</span><h2 className="mt-3 text-2xl font-black text-[#3E2723] sm:text-3xl">Editor Pembelajaran</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-[#6D5A50]">Atur materi untuk ketiga pintu, sunting urutan dan isi soal, simpan sebagai draf, lalu terbitkan setelah pratinjau. Perubahan disimpan pada akun guru dan versi terbit yang dibaca murid terpisah dari draf.</p></div>
+              <div className="flex flex-wrap gap-2"><button type="button" onClick={() => setPreviewLearning((open) => !open)} className="rounded-xl border border-[#D8CFC8] bg-white px-4 py-2.5 text-sm font-extrabold text-[#704A36]">{previewLearning ? 'Tutup Pratinjau' : 'Pratinjau Murid'}</button><span className="self-center rounded-full bg-white px-3 py-2 text-xs font-bold text-[#4A671E]">Database: {cloudStatus === 'online' ? 'Terhubung' : cloudStatus === 'connecting' ? 'Menghubungkan' : 'Offline'}</span></div>
+            </div>
+          </section>
+          {editorNotice && <div role="status" className="rounded-xl border border-[#DCE9C6] bg-[#F4F9E9] px-4 py-3 text-sm font-bold text-[#42631D]">{editorNotice}</div>}
+          {previewLearning && <section className="rounded-2xl border-2 border-dashed border-[#FFCB74] bg-white p-5 sm:p-7"><span className="rounded-full bg-[#FFF7DC] px-3 py-1 text-xs font-black text-[#8C6D1F]">PRATINJAU KONTEN DRAF</span><h3 className="mt-3 text-xl font-black text-[#3E2723]">{editorDraft.tracks[editorTrack].name} · {editorDraft.tracks[editorTrack].difficulty}</h3><p className="mt-2 text-sm leading-6 text-[#5D4E46]">{editorDraft.objective}</p><div className="mt-4 grid gap-3 sm:grid-cols-2"><p className="rounded-xl bg-[#F4F9E9] p-4 text-sm"><strong>Materi:</strong> {editorDraft.materials}</p><p className="rounded-xl bg-[#FFF7DC] p-4 text-sm"><strong>Petunjuk:</strong> {editorDraft.hints}</p><p className="rounded-xl bg-[#FAF8F5] p-4 text-sm"><strong>Instruksi:</strong> {editorDraft.instructions}</p><p className="rounded-xl bg-[#FBEDE2] p-4 text-sm"><strong>Aktivitas pintu:</strong> {editorDraft.tracks[editorTrack].activity}</p></div>{selectedEditorQuestion && <div className="mt-4 rounded-xl border border-[#EAE3D9] p-4"><strong>{selectedEditorQuestion.title}</strong><p className="mt-2 text-sm">{selectedEditorQuestion.story}</p></div>}</section>}
+
+          <section className="space-y-5 rounded-2xl border border-[#EAE3D9] bg-white p-5 shadow-sm sm:p-7">
+            <div><h3 className="text-lg font-black text-[#3E2723]">Tujuan dan panduan belajar</h3><p className="text-sm text-[#6D5A50]">Konten umum ditampilkan pada materi murid setelah diterbitkan.</p></div>
+            <div className="grid gap-4 md:grid-cols-2">
+              {([
+                ['objective', 'Tujuan pembelajaran'], ['materials', 'Materi dan alat belajar'], ['instructions', 'Instruksi pengerjaan'], ['hints', 'Petunjuk umum'],
+              ] as const).map(([key, label]) => <label key={key} className="space-y-1.5 text-sm font-extrabold text-[#3E2723]">{label}<textarea rows={3} value={editorDraft[key]} onChange={(event) => setEditorDraft((draft) => ({ ...draft, [key]: event.target.value }))} className="w-full rounded-xl border border-[#D8CFC8] bg-[#FFFCF7] p-3 text-sm font-medium" /></label>)}
+            </div>
+          </section>
+
+          <section className="space-y-5 rounded-2xl border border-[#EAE3D9] bg-white p-5 shadow-sm sm:p-7">
+            <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-lg font-black text-[#3E2723]">Pintu belajar 1, 2, dan 3</h3><p className="text-sm text-[#6D5A50]">Atur nama, materi, kasus, aktivitas, dan tingkat tantangan tiap pintu.</p></div><select aria-label="Pilih pintu belajar" value={editorTrack} onChange={(event) => setEditorTrack(event.target.value as LearningTrack)} className="rounded-xl border border-[#D8CFC8] bg-[#FFFCF7] px-3 py-2 font-bold"><option value="penjelajah">Pintu 1 · Penjelajah</option><option value="pengembang">Pintu 2 · Pengembang</option><option value="inovator">Pintu 3 · Inovator</option></select></div>
+            <div className="grid gap-4 sm:grid-cols-2">{([
+              ['name', 'Nama pintu'], ['difficulty', 'Tingkat kesulitan'], ['material', 'Materi khusus pintu'], ['cases', 'Nama dan konteks kasus'], ['activity', 'Aktivitas murid'],
+            ] as const).map(([key, label]) => <label key={key} className="space-y-1.5 text-sm font-extrabold text-[#3E2723]">{label}<textarea rows={key === 'name' || key === 'difficulty' ? 1 : 2} value={editorDraft.tracks[editorTrack][key]} onChange={(event) => setEditorDraft((draft) => ({ ...draft, tracks: { ...draft.tracks, [editorTrack]: { ...draft.tracks[editorTrack], [key]: event.target.value } } }))} className="w-full rounded-xl border border-[#D8CFC8] bg-[#FFFCF7] p-3 text-sm font-medium" /></label>)}</div>
+          </section>
+
+          <section className="space-y-5 rounded-2xl border border-[#EAE3D9] bg-white p-5 shadow-sm sm:p-7">
+            <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-lg font-black text-[#3E2723]">Editor soal dan aktivitas</h3><p className="text-sm text-[#6D5A50]">Sunting teks kasus, bilangan, kunci, tahapan, dan petunjuk per langkah. Gunakan tombol panah untuk menyusun urutan.</p></div><button type="button" onClick={handleAddEditorQuestion} className="inline-flex items-center gap-2 rounded-xl bg-[#4A671E] px-4 py-2.5 text-sm font-black text-white"><Plus size={17}/> Tambah soal</button></div>
+            <div className="grid gap-4 lg:grid-cols-[minmax(220px,.72fr)_minmax(0,1.6fr)]">
+              <div className="max-h-[32rem] space-y-2 overflow-y-auto rounded-xl bg-[#FAF8F5] p-3">{editorQuestions.map((question, index) => <div key={question.id} className={`rounded-xl border p-3 ${selectedEditorQuestion?.id === question.id ? 'border-[#FF913D] bg-white' : 'border-[#EAE3D9] bg-white/70'}`}><button type="button" onClick={() => { setEditorTrack(question.track); setEditorQuestionId(question.id); }} className="w-full text-left"><span className="block text-xs font-black text-[#95634F]">{index + 1}. Misi {question.missionNumber} · {editorDraft.tracks[question.track].name}</span><span className="mt-1 block text-sm font-bold text-[#3E2723]">{question.title}</span></button><div className="mt-2 flex gap-1"><button type="button" aria-label="Pindahkan soal ke atas" disabled={index === 0} onClick={() => moveEditorQuestion(question.id, -1)} className="rounded-lg border px-3 py-1 text-sm disabled:opacity-40">↑</button><button type="button" aria-label="Pindahkan soal ke bawah" disabled={index === editorQuestions.length - 1} onClick={() => moveEditorQuestion(question.id, 1)} className="rounded-lg border px-3 py-1 text-sm disabled:opacity-40">↓</button><button type="button" onClick={() => setEditorDraft((draft) => ({ ...draft, questions: draft.questions.filter((item) => item.id !== question.id) }))} className="ml-auto rounded-lg border border-red-200 px-3 py-1 text-xs font-bold text-red-700">Hapus</button></div></div>)}</div>
+              {selectedEditorQuestion ? <div className="grid content-start gap-4 sm:grid-cols-2"><label className="space-y-1 text-sm font-bold text-[#3E2723]">Pintu soal<select value={selectedEditorQuestion.track} onChange={(event) => patchEditorQuestion(selectedEditorQuestion.id, { track: event.target.value as LearningTrack })} className="w-full rounded-xl border border-[#D8CFC8] p-3"><option value="penjelajah">Pintu 1 · Penjelajah</option><option value="pengembang">Pintu 2 · Pengembang</option><option value="inovator">Pintu 3 · Inovator</option></select></label><label className="space-y-1 text-sm font-bold text-[#3E2723]">Nomor kasus<select value={selectedEditorQuestion.missionNumber} onChange={(event) => patchEditorQuestion(selectedEditorQuestion.id, { missionNumber: Number(event.target.value) as 1 | 2 | 3 | 4 })} className="w-full rounded-xl border border-[#D8CFC8] p-3">{[1, 2, 3, 4].map((number) => <option key={number} value={number}>Kasus {number}</option>)}</select></label>{[
+                { key: 'title', label: 'Nama soal / aktivitas', rows: 1 }, { key: 'story', label: 'Cerita kasus', rows: 4 }, { key: 'step1Prompt', label: 'Instruksi tahap 1', rows: 2 }, { key: 'step2Prompt', label: 'Instruksi tahap 2', rows: 2 }, { key: 'step3Prompt', label: 'Instruksi tahap 3', rows: 2 }, { key: 'step4Prompt', label: 'Instruksi tahap 4', rows: 2 }, { key: 'explanation', label: 'Pembahasan / rubrik jawaban', rows: 3 }, { key: 'practiceAdvice', label: 'Saran belajar', rows: 2 },
+              ].map(({ key, label, rows }) => <label key={key} className="space-y-1 text-sm font-bold text-[#3E2723]">{label}<textarea rows={rows} value={String(selectedEditorQuestion[key as keyof MissionQuestion] ?? '')} onChange={(event) => patchEditorQuestion(selectedEditorQuestion.id, { [key]: event.target.value })} className="w-full rounded-xl border border-[#D8CFC8] bg-[#FFFCF7] p-3 text-sm font-medium" /></label>)}
+                <label className="space-y-1 text-sm font-bold text-[#3E2723]">Bilangan 1<input type="number" min="1" value={selectedEditorQuestion.num1} onChange={(event) => patchEditorQuestion(selectedEditorQuestion.id, { num1: Math.max(1, Number(event.target.value) || 1) })} className="w-full rounded-xl border border-[#D8CFC8] p-3" /></label><label className="space-y-1 text-sm font-bold text-[#3E2723]">Bilangan 2<input type="number" min="1" value={selectedEditorQuestion.num2} onChange={(event) => patchEditorQuestion(selectedEditorQuestion.id, { num2: Math.max(1, Number(event.target.value) || 1) })} className="w-full rounded-xl border border-[#D8CFC8] p-3" /></label>
+                <label className="space-y-1 text-sm font-bold text-[#3E2723]">Kunci jawaban akhir<input value={selectedEditorQuestion.internalKey.finalAnswer} onChange={(event) => patchEditorQuestion(selectedEditorQuestion.id, { internalKey: { ...selectedEditorQuestion.internalKey, finalAnswer: event.target.value } })} className="w-full rounded-xl border border-[#D8CFC8] p-3" /></label><label className="space-y-1 text-sm font-bold text-[#3E2723]">Tanggal awal (opsional)<input value={selectedEditorQuestion.startDate || ''} onChange={(event) => patchEditorQuestion(selectedEditorQuestion.id, { startDate: event.target.value || undefined })} className="w-full rounded-xl border border-[#D8CFC8] p-3" /></label>
+                {(['step1', 'step2', 'step3', 'step4'] as const).map((step) => <label key={step} className="space-y-1 text-sm font-bold text-[#3E2723]">Petunjuk {step.slice(-1)} (satu per baris)<textarea rows={3} value={selectedEditorQuestion.didacticHints[step].join('\n')} onChange={(event) => patchEditorQuestion(selectedEditorQuestion.id, { didacticHints: { ...selectedEditorQuestion.didacticHints, [step]: event.target.value.split('\n') } })} className="w-full rounded-xl border border-[#D8CFC8] bg-[#FFFCF7] p-3 text-sm font-medium" /></label>)}
+                <div className="rounded-xl bg-[#FFF7DC] p-3 text-sm"><strong>Kunci hitung otomatis:</strong> KPK({selectedEditorQuestion.num1}, {selectedEditorQuestion.num2}) = {calculateLCM(selectedEditorQuestion.num1, selectedEditorQuestion.num2)} {selectedEditorQuestion.unit}</div>
+              </div> : <p className="rounded-xl bg-[#FAF8F5] p-5 text-sm text-[#6D5A50]">Belum ada soal. Tambahkan soal untuk mulai menyunting.</p>}
+            </div>
+            <div className="flex flex-wrap justify-end gap-3 border-t border-[#EAE3D9] pt-4"><button type="button" disabled={editorBusy || cloudStatus !== 'online'} onClick={() => void saveEditor(false)} className="rounded-xl border border-[#95634F] bg-white px-5 py-3 text-sm font-black text-[#704A36] disabled:opacity-50">{editorBusy ? 'Menyimpan…' : 'Simpan Draf'}</button><button type="button" disabled={editorBusy || cloudStatus !== 'online' || !editorDraft.questions.length} onClick={() => { if (confirm('Terbitkan materi ini untuk semua murid di kelas Anda?')) void saveEditor(true); }} className="rounded-xl bg-[#FF913D] px-5 py-3 text-sm font-black text-white shadow-sm disabled:opacity-50">{editorBusy ? 'Memproses…' : 'Publikasikan untuk Murid'}</button></div>
+          </section>
         </div>
       )}
 

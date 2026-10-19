@@ -248,6 +248,7 @@ export const MissionsHubView: React.FC<Props> = ({ onNavigate, onSelectMission }
         {missionsMeta.map((m) => {
           const Illustration = m.Illustration;
           const statusInfo = getMissionStatus(m.num);
+          const missionQuestion = questions.find((question) => question.missionNumber === m.num && question.track === currentTrack);
 
           let badgeColor = 'text-[#6D5A50] bg-neutral-100';
           let StatusIcon = PlayCircle;
@@ -273,9 +274,9 @@ export const MissionsHubView: React.FC<Props> = ({ onNavigate, onSelectMission }
                     <span>{statusInfo.label}</span>
                   </span>
                   <h3 className="text-lg font-bold text-[#3E2723] pt-1 group-hover:text-[#FF913D] transition-colors">
-                    {m.title}
+                    {missionQuestion?.title || m.title}
                   </h3>
-                  <p className="text-xs text-[#6D5A50]">{m.subtitle}</p>
+                  <p className="line-clamp-2 text-xs text-[#6D5A50]">{missionQuestion?.story || m.subtitle}</p>
                 </div>
 
                 <div className="w-20 h-20 shrink-0 flex items-center justify-center bg-[#FAF8F5] rounded-xl border border-[#EAE3D9] p-1">

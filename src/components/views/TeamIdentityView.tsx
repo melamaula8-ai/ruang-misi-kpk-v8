@@ -134,7 +134,7 @@ export const TeamIdentityView: React.FC<Props> = ({ onNavigate, validationAttemp
     }
     setErrorMessage('');
     updateTeamIdentity(formData);
-    onNavigate('misi', true);
+    onNavigate('pintu', true);
   };
 
   return (
