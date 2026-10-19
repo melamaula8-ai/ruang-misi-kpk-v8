@@ -111,11 +111,18 @@ export interface LearningContent {
 }
 export interface LearningContentState { draft: LearningContent; published: LearningContent }
 
-const makeDefaultLearningContent = (bank: MissionQuestion[]): LearningContent => ({
+const PREVIOUS_DEFAULT_LEARNING_COPY = {
   objective: 'Menentukan KPK dari dua bilangan melalui masalah sehari-hari, menjelaskan strategi, dan memeriksa jawaban bersama tim.',
   materials: 'Papan tulis atau kertas, pensil warna, tabel kelipatan, garis bilangan, dan kalender.',
   instructions: 'Baca cerita dengan teliti, bagi peran dalam tim, tulis strategi pada empat tahap, lalu periksa jawaban sebelum dikirim.',
   hints: 'Mulai dengan menuliskan kelipatan kedua bilangan. Cari bilangan pertama yang muncul pada kedua daftar.',
+};
+
+const makeDefaultLearningContent = (bank: MissionQuestion[]): LearningContent => ({
+  objective: 'Melalui kegiatan berdiskusi, murid dapat mengaitkan konsep KPK dalam kehidupan sehari-hari dengan tepat (C4_Menganalisis).',
+  materials: 'Kartu cerita tentang jadwal kegiatan berulang, kalender, tabel kelipatan, kertas atau papan tulis, dan alat tulis untuk mencatat hasil diskusi.',
+  instructions: 'Baca situasi sehari-hari bersama kelompok. Diskusikan kegiatan yang berulang, hubungkan jadwalnya dengan konsep KPK, lalu tuliskan alasan dan kesimpulan kelompok.',
+  hints: 'Kegiatan apa saja yang berulang dalam cerita? Kapan kegiatan itu berlangsung bersamaan? Gunakan daftar kelipatan atau kalender untuk menemukan hubungan dengan KPK.',
   tracks: {
     penjelajah: { name: 'Penjelajah', material: 'Tabel kelipatan berpandu dan contoh langkah.', cases: 'Jadwal piket, lampu lalu lintas, olahraga, dan agenda sekolah.', activity: 'Lengkapi pola kelipatan dengan petunjuk bertahap.', difficulty: 'Terbimbing' },
     pengembang: { name: 'Pengembang', material: 'Ruang untuk menyusun daftar kelipatan dan strategi sendiri.', cases: 'Jadwal berulang dan kalender kegiatan sekolah.', activity: 'Pilih strategi kelompok dan jelaskan cara menemukan KPK.', difficulty: 'Mandiri dengan refleksi' },
@@ -123,6 +130,17 @@ const makeDefaultLearningContent = (bank: MissionQuestion[]): LearningContent =>
   },
   questions: bank,
 });
+
+const updateUneditedDefaultCopy = (content: LearningContent): LearningContent => {
+  const defaults = makeDefaultLearningContent(content.questions);
+  return {
+    ...content,
+    objective: content.objective === PREVIOUS_DEFAULT_LEARNING_COPY.objective ? defaults.objective : content.objective,
+    materials: content.materials === PREVIOUS_DEFAULT_LEARNING_COPY.materials ? defaults.materials : content.materials,
+    instructions: content.instructions === PREVIOUS_DEFAULT_LEARNING_COPY.instructions ? defaults.instructions : content.instructions,
+    hints: content.hints === PREVIOUS_DEFAULT_LEARNING_COPY.hints ? defaults.hints : content.hints,
+  };
+};
 
 const DEFAULT_TEAM: TeamIdentity = {
   teamName: '',
@@ -501,14 +519,21 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       ? migrateInnovatorProblemAnswers(data.submissions)
       : null;
     const incomingLearning = data.settings?.learningContent as LearningContentState | undefined;
-    if (incomingLearning?.draft && incomingLearning?.published) {
-      setLearningContent(incomingLearning);
-      const publishedQuestions = incomingLearning.published.questions;
+    const updatedIncomingLearning = incomingLearning?.draft && incomingLearning?.published
+      ? {
+          draft: updateUneditedDefaultCopy(incomingLearning.draft),
+          published: updateUneditedDefaultCopy(incomingLearning.published),
+        }
+      : incomingLearning;
+    if (updatedIncomingLearning?.draft && updatedIncomingLearning?.published) {
+      setLearningContent(updatedIncomingLearning);
+      const publishedQuestions = updatedIncomingLearning.published.questions;
       if (Array.isArray(publishedQuestions) && publishedQuestions.length) setQuestions(migrateInnovatorProblemAnalysis(publishedQuestions));
     } else if (!isTeacherLoggedIn && Array.isArray(data.settings?.learningContent?.questions)) {
       const publicContent = data.settings.learningContent as LearningContent;
-      setLearningContent({ draft: publicContent, published: publicContent });
-      if (publicContent.questions.length) setQuestions(migrateInnovatorProblemAnalysis(publicContent.questions));
+      const updatedPublicContent = updateUneditedDefaultCopy(publicContent);
+      setLearningContent({ draft: updatedPublicContent, published: updatedPublicContent });
+      if (updatedPublicContent.questions.length) setQuestions(migrateInnovatorProblemAnalysis(updatedPublicContent.questions));
     } else if (Array.isArray(data.settings?.questions) && data.settings.questions.length) {
       const migratedQuestions = migrateInnovatorProblemAnalysis(data.settings.questions);
       const seeded = makeDefaultLearningContent(migratedQuestions);
@@ -575,7 +600,7 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       trackLock: data.settings?.trackLock ?? trackLockConfig,
       rubric: data.settings?.rubric ?? rubricConfig,
       logo: data.settings && 'customLogo' in data.settings ? data.settings.customLogo : customLogoUrl,
-      learningContent: incomingLearning ?? (Array.isArray(data.settings?.questions) && data.settings.questions.length
+      learningContent: updatedIncomingLearning ?? (Array.isArray(data.settings?.questions) && data.settings.questions.length
         ? { draft: makeDefaultLearningContent(migrateInnovatorProblemAnalysis(data.settings.questions)), published: makeDefaultLearningContent(migrateInnovatorProblemAnalysis(data.settings.questions)) }
         : learningContent),
     });
