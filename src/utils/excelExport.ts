@@ -67,7 +67,7 @@ export const exportAssessmentToExcel = (
   // ==========================================
   const rekapData: (string | number)[][] = [
     ['REKAPITULASI HASIL ASESMEN FORMATIF MATEMATIKA KELAS V SD/MI'],
-    ['Materi Pokok: Kelipatan Persekutuan Terkecil (KPK) - Problem Based Learning (PBL) & 4 Tahap Polya'],
+    ['Materi Pokok: Kelipatan Persekutuan Terkecil (KPK) - 4 Tahap Polya'],
     [`Tanggal Ekspor: ${new Date().toLocaleDateString('id-ID', { dateStyle: 'full', timeStyle: 'short' })}`],
     [''], // Baris kosong pemisah
     [

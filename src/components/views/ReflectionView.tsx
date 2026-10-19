@@ -95,7 +95,7 @@ export const ReflectionView: React.FC<Props> = ({ onNavigate }) => {
     }
   };
 
-  // 4 Pertanyaan Refleksi Lengkap & Relevan dengan PBL serta Rubrik Penilaian
+  // Empat pertanyaan refleksi berdasarkan pengalaman asesmen dan rubrik penilaian
   const questionsList = [
     {
       id: 'lcmLearning' as const,
@@ -133,7 +133,7 @@ export const ReflectionView: React.FC<Props> = ({ onNavigate }) => {
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#EAE3D9] pb-4">
         <div>
           <span className="text-xs font-bold uppercase tracking-wider text-[#95634F]">
-            PBL Sintaks 5: Menganalisis dan Mengevaluasi Proses Belajar
+            Refleksi dan Evaluasi Proses Belajar
           </span>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-[#3E2723] tracking-tight">
             Refleksi Perjalanan Misi Tim

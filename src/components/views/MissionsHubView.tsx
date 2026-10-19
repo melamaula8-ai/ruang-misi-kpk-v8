@@ -138,7 +138,7 @@ export const MissionsHubView: React.FC<Props> = ({ onNavigate, onSelectMission }
   const handleProceedToPresentation = () => {
     if (!allCasesCompleted) return;
     soundManager.playNextStep();
-    onNavigate('evaluasi');
+    onNavigate('presentasi');
   };
 
   // Auto-redirect to presentation when time expires (Section B3)

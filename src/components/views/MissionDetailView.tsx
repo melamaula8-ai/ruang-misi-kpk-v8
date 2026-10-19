@@ -9,6 +9,7 @@ import {
   ChevronDown,
   ChevronUp,
   Table,
+  Clock3,
 } from 'lucide-react';
 import {
   PiketIllustration,
@@ -40,6 +41,8 @@ export const MissionDetailView: React.FC<Props> = ({
     updateMissionAnswer,
     unlockActiveSubmission,
     startMissionTimer,
+    timerSeconds,
+    isTimerActive,
     hasTimeExpired,
   } = useAssessment();
 
@@ -175,7 +178,7 @@ export const MissionDetailView: React.FC<Props> = ({
   };
 
   return (
-    <div className="w-full max-w-5xl min-w-0 mx-auto px-4 sm:px-6 py-8 space-y-6">
+    <div className="mission-detail-page relative isolate w-full max-w-6xl min-w-0 mx-auto px-3 sm:px-6 py-5 sm:py-8 space-y-5 sm:space-y-6">
       {/* Top Breadcrumb & Navigation */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#EAE3D9] pb-4">
         <button
@@ -189,11 +192,18 @@ export const MissionDetailView: React.FC<Props> = ({
           <span>Kembali ke Dasbor 4 Kasus</span>
         </button>
 
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-[#8C7A70]">Pintu Belajar:</span>
-          <span className="text-xs font-extrabold uppercase px-2.5 py-0.5 rounded bg-[#C5E68A]/30 text-[#4A671E] border border-[#C5E68A]">
-            {currentTrack}
-          </span>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-[#8C7A70]">Pintu Belajar:</span>
+            <span className="text-xs font-extrabold uppercase px-2.5 py-0.5 rounded bg-[#C5E68A]/30 text-[#4A671E] border border-[#C5E68A]">
+              {currentTrack}
+            </span>
+          </div>
+          <div role="timer" aria-label={`Sisa waktu ${Math.floor(timerSeconds / 60)} menit ${timerSeconds % 60} detik`} className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-black tabular-nums lg:hidden ${timerSeconds < 300 ? 'border-red-200 bg-red-50 text-red-700' : 'border-[#F0D9A7] bg-[#FFF7DC] text-[#704A36]'}`}>
+            <Clock3 className="h-4 w-4" aria-hidden="true" />
+            <span>{String(Math.floor(timerSeconds / 60)).padStart(2, '0')}:{String(timerSeconds % 60).padStart(2, '0')}</span>
+            {isTimerActive && <span className="font-semibold">· berjalan</span>}
+          </div>
         </div>
       </div>
 
@@ -231,11 +241,11 @@ export const MissionDetailView: React.FC<Props> = ({
         </div>
       )}
 
-      {/* Story & Problem Orientation Box (PBL Syntax 1) */}
-      <section className="min-w-0 bg-white border border-[#EAE3D9] rounded-2xl p-4 sm:p-8 shadow-xs">
+      {/* Story and challenge introduction */}
+      <section className="mission-story-card min-w-0 bg-white border border-[#EAE3D9] rounded-2xl p-4 sm:p-8 shadow-sm">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
           <div className="md:col-span-8 space-y-3">
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[11px] font-extrabold uppercase bg-[#FFE082]/40 text-[#6F4736]">
+            <div className="inline-flex max-w-full flex-wrap items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-extrabold uppercase bg-[#FFE082]/55 text-[#6F4736]">
               Kasus {missionNumber} dari 4 · Orientasi Masalah
             </div>
             <h1 className="text-xl sm:text-2xl font-extrabold text-[#3E2723]">
@@ -248,8 +258,8 @@ export const MissionDetailView: React.FC<Props> = ({
           </div>
 
           <div className="md:col-span-4 flex justify-center">
-            <div className="w-32 h-32 sm:w-36 sm:h-36 bg-[#FAF8F5] rounded-2xl border border-[#EAE3D9] flex items-center justify-center p-2">
-              <Illustration className="w-28 h-28" />
+            <div className="mission-illustration flex h-36 w-full max-w-[15rem] items-center justify-center rounded-2xl border border-[#EAE3D9] bg-[#FAF8F5] p-3 sm:h-48 sm:max-w-none">
+              <Illustration className="h-full w-full max-w-[13rem]" />
             </div>
           </div>
         </div>
@@ -285,7 +295,7 @@ export const MissionDetailView: React.FC<Props> = ({
       </section>
 
       {/* 4 Tahap Polya Navigation Tabs */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 border-b border-[#EAE3D9]">
+      <div className="mission-step-nav grid grid-cols-2 sm:grid-cols-4 gap-2 rounded-2xl border border-[#EAE3D9] bg-white/85 p-2 shadow-sm">
         {polyaSteps.map((step) => {
           const isActive = activeStep === step.id;
           return (
@@ -295,10 +305,10 @@ export const MissionDetailView: React.FC<Props> = ({
                 soundManager.playClick();
                 setActiveStep(step.id);
               }}
-              className={`min-w-0 py-3 px-2 sm:px-4 text-[11px] sm:text-xs font-bold border-b-2 transition-all cursor-pointer ${
+              className={`min-h-12 min-w-0 rounded-xl border px-2 py-2 text-xs font-bold transition-all cursor-pointer sm:px-4 ${
                 isActive
-                  ? 'border-[#FF913D] text-[#3E2723] bg-white rounded-t-xl'
-                  : 'border-transparent text-[#6D5A50] hover:text-[#3E2723]'
+                  ? 'border-[#FF913D] text-[#3E2723] bg-[#FFF7DC] shadow-sm'
+                  : 'border-transparent text-[#6D5A50] hover:border-[#EAE3D9] hover:bg-white hover:text-[#3E2723]'
               }`}
             >
               {step.label}
@@ -308,7 +318,13 @@ export const MissionDetailView: React.FC<Props> = ({
       </div>
 
       {/* Polya Step Work Area */}
-      <section className="min-w-0 bg-white border border-[#EAE3D9] rounded-2xl p-4 sm:p-8 space-y-6 shadow-xs">
+      <section className="practice-question-card mission-work-card min-w-0 space-y-6 rounded-2xl border border-[#EAE3D9] bg-white p-4 pt-6 shadow-md sm:p-8 sm:pt-8">
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#EAE3D9] bg-gradient-to-r from-[#F4F9E9] via-white to-[#FFF7DC] px-4 py-3">
+          <div><span className="text-xs font-black uppercase tracking-wider text-[#95634F]">Ruang kerja kelompok</span><p className="mt-0.5 text-sm font-bold text-[#3E2723]">Kasus {missionNumber} dari 4 · Langkah {Number(activeStep.slice(-1))} dari 4</p></div>
+          <div className="flex items-center gap-1.5" aria-label={`Langkah ${Number(activeStep.slice(-1))} dari 4`}>
+            {polyaSteps.map((step, index) => <span key={step.id} className={`h-2.5 w-7 rounded-full sm:w-10 ${index < Number(activeStep.slice(-1)) ? 'bg-[#FF913D]' : 'bg-[#EAE3D9]'}`} />)}
+          </div>
+        </div>
         {/* Step Header */}
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#EAE3D9] pb-4">
           <div>
@@ -404,13 +420,13 @@ export const MissionDetailView: React.FC<Props> = ({
                 {field.type === 'textarea' ? (
                   <textarea
                     id={inputId}
-                    rows={6}
+                    rows={5}
                     value={val}
                     onChange={(e) =>
                       handleInputChange(activeStep, field.id, e.target.value)
                     }
-                    placeholder="Tuliskan jawaban kelompok di sini..."
-                    className="box-border h-40 min-h-[140px] max-h-[180px] w-full min-w-0 resize-y px-4 py-3 bg-[#FAF8F5] focus:bg-white border border-[#D8CFC8] hover:border-[#95634F] focus:border-[#FF913D] rounded-xl text-sm font-medium text-[#2D231E] focus:outline-none transition-colors"
+                    placeholder="Tuliskan cara kamu menemukan jawabannya di sini…"
+                    className="mission-answer-textarea box-border h-auto min-h-[9.5rem] w-full min-w-0 resize-y rounded-xl border border-[#D8CFC8] bg-[#FAF8F5] px-4 py-3 text-sm font-medium leading-6 text-[#2D231E] transition-colors placeholder:text-[#8C7A70] hover:border-[#95634F] focus:border-[#FF913D] focus:bg-white focus:outline-none focus:ring-4 focus:ring-[#FF913D]/15"
                   />
                 ) : (
                   <div className="min-w-0 space-y-1.5">

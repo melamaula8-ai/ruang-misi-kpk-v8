@@ -10,7 +10,7 @@ interface Props {
 }
 
 export const ClassAccessView: React.FC<Props> = ({ preloadedCode = '', onSuccess, onBack }) => {
-  const { verifyAndClaimGroupToken, activeGroupToken } = useAssessment();
+  const { verifyAndClaimGroupToken, validateStudentClassCode, activeGroupToken } = useAssessment();
   const [code, setCode] = useState(preloadedCode.toUpperCase());
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -48,7 +48,22 @@ export const ClassAccessView: React.FC<Props> = ({ preloadedCode = '', onSuccess
     }
     setBusy(true);
     try {
-      const result = await verifyAndClaimGroupToken(code.trim());
+      const classResult = await validateStudentClassCode(code.trim());
+      if (!classResult.success) {
+        setError(classResult.message);
+        return;
+      }
+      const response = await fetch('/api/group-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ classCode: code.trim().toUpperCase() }),
+      });
+      const groupData = await response.json().catch(() => ({}));
+      if (!response.ok || typeof groupData.token?.code !== 'string') {
+        setError(groupData.error || 'Sesi kelompok belum berhasil dibuat. Silakan coba lagi.');
+        return;
+      }
+      const result = await verifyAndClaimGroupToken(groupData.token.code);
       if (result.success) {
         setMessage(result.message);
         window.setTimeout(onSuccess, 450);

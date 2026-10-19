@@ -94,7 +94,7 @@ button { min-height: 2.65rem; }
 .practice-question-card, .member-role-card, .learning-card { transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease; }
 .practice-question-card:hover, .member-role-card:hover { transform: translateY(-2px); box-shadow: 0 16px 34px rgb(149 99 79 / 12%); }
 @media (max-width: 640px) {
-  .role-landing h1 { font-size: clamp(2.25rem, 9vw, 3rem); }
+  .role-landing h1 { font-size: clamp(2rem, 8vw, 2.65rem); }
   .landing-music-panel { justify-content: flex-start; }
   .landing-music-panel input[type="range"] { width: 4rem; }
   .adventure-page { padding-top: 1rem; }
@@ -136,6 +136,29 @@ main > .max-w-6xl, main > .max-w-5xl, main > .teacher-dashboard-page,
 .role-landing { min-height: 100svh; }
 .role-landing > div { min-width: 0; }
 .role-choice { overflow-wrap: anywhere; }
+.mission-detail-page {
+  min-height: 100%;
+  background-color: #F8F7F1;
+  background-image:
+    radial-gradient(circle at 8% 7%, rgb(197 230 138 / 28%), transparent 17rem),
+    radial-gradient(circle at 94% 36%, rgb(255 224 130 / 27%), transparent 19rem),
+    radial-gradient(circle at 18% 86%, rgb(255 145 61 / 10%), transparent 17rem);
+}
+.mission-detail-page::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+  opacity: .35;
+  background-image: radial-gradient(#95634F22 1px, transparent 1px);
+  background-size: 24px 24px;
+  mask-image: linear-gradient(to bottom, black, transparent 70%);
+}
+.mission-story-card { box-shadow: 0 12px 32px rgb(149 99 79 / 8%); }
+.mission-story-card p { overflow-wrap: anywhere; }
+.mission-illustration svg { max-height: 100%; }
+.mission-answer-textarea { min-height: 11rem; }
 .learning-card, .practice-question-card, .class-access-card,
 .mission-hub-hero, .identity-hero, .track-selection-hero { min-width: 0; }
 @media (max-width: 767px) {
@@ -150,7 +173,11 @@ main > .max-w-6xl, main > .max-w-5xl, main > .teacher-dashboard-page,
   table { display: block; max-width: 100%; overflow-x: auto; }
 }
 @media (max-width: 420px) {
-  .role-landing .math-float-card { right: .5rem; top: 2.25rem; transform: scale(.86); transform-origin: top right; }
-  .role-landing .math-number-strip { left: .5rem; bottom: 5rem; transform: scale(.9) rotate(-3deg); transform-origin: bottom left; }
   .role-landing .landing-shell { border-radius: 1.25rem; }
+}
+@media (max-width: 767px) {
+  .mission-detail-page { padding-bottom: max(2rem, env(safe-area-inset-bottom)); }
+  .mission-detail-page .mission-step-nav { gap: .4rem; }
+  .mission-detail-page .mission-step-nav button { min-height: 3.25rem; line-height: 1.25rem; }
+  .mission-answer-textarea { min-height: 9.5rem; }
 }

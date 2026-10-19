@@ -88,7 +88,7 @@ export const PresentationView: React.FC<Props> = ({ onNavigate }) => {
               {team.teamName || 'Kelompok Belajar Kelas V'}
             </h2>
             <p className="text-sm font-semibold text-[#95634F]">
-              {team.schoolName || 'SD/MI'} · Pembelajaran Berbasis Masalah (PBL)
+              {team.schoolName || 'SD/MI'} · Asesmen Formatif Matematika
             </p>
           </div>
 
@@ -415,7 +415,7 @@ export const PresentationView: React.FC<Props> = ({ onNavigate }) => {
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#EAE3D9] pb-4">
         <div>
           <span className="text-xs font-bold uppercase tracking-wider text-[#95634F]">
-            PBL Sintaks 4: Menyajikan Hasil Pemecahan Masalah
+            Presentasi Hasil Pemecahan Masalah
           </span>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-[#3E2723] tracking-tight">
             Bahan Presentasi Kelompok

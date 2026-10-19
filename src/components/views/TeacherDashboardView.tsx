@@ -943,7 +943,7 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
             {/* Reflection Answers Display */}
             <div className="p-4 bg-[#FAF8F5] border border-[#EAE3D9] rounded-xl space-y-3">
               <span className="text-xs font-bold text-[#95634F] uppercase tracking-wider block">
-                Jawaban Refleksi Kelompok (PBL Sintaks 5):
+                Jawaban Refleksi Kelompok:
               </span>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                 <div className="bg-white p-3 rounded-lg border border-[#E8DFD8] space-y-1">

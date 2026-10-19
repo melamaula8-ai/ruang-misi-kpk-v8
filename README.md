@@ -39,7 +39,7 @@ Materi utama yang dikembangkan dalam aplikasi ini adalah **Kelipatan Persekutuan
 
 Ruang Misi KPK dirancang dengan mengintegrasikan beberapa pendekatan dan model pembelajaran berikut.
 
-**1. Problem Based Learning (PBL)**
+**1. Pembelajaran Matematika Kontekstual**
 
 Pembelajaran dimulai dari permasalahan yang harus diselesaikan peserta didik. Peserta didik mengeksplorasi informasi, berdiskusi, menyusun strategi, dan menyampaikan hasil penyelesaian.
 

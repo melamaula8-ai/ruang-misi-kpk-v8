@@ -158,7 +158,7 @@ export const TeamIdentityView: React.FC<Props> = ({ onNavigate, validationAttemp
           </div>
           <div className="min-w-0">
             <span className="text-xs font-bold uppercase tracking-wider text-[#95634F]">
-              Kolaborasi Problem Based Learning (PBL)
+              Kolaborasi Tim
             </span>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-[#3E2723] tracking-tight break-words">
               Identitas Tim & Kesepakatan Belajar

@@ -39,9 +39,9 @@ export const HomeView: React.FC<Props> = ({ onNavigate }) => {
   ];
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-12">
+    <div className="mx-auto w-full max-w-6xl space-y-8 px-4 py-5 sm:space-y-12 sm:px-6 sm:py-8">
       {/* Hero Section */}
-      <section className="bg-white border border-[#EAE3D9] rounded-2xl p-6 sm:p-10 shadow-xs relative overflow-hidden">
+      <section className="relative min-w-0 overflow-hidden rounded-2xl border border-[#EAE3D9] bg-white p-4 shadow-xs sm:p-8 lg:p-10">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
           <div className="lg:col-span-7 space-y-5">
             <div className="flex items-center gap-3">

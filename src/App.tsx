@@ -11,6 +11,8 @@ import { MissionsHubView } from './components/views/MissionsHubView';
 import { MissionDetailView } from './components/views/MissionDetailView';
 import { PracticeQuestionsView } from './components/views/PracticeQuestionsView';
 import { ResultsEvaluationView } from './components/views/ResultsEvaluationView';
+import { PresentationView } from './components/views/PresentationView';
+import { ReflectionView } from './components/views/ReflectionView';
 import { TeacherDashboardView } from './components/views/TeacherDashboardView';
 import { TeacherLoginModal } from './components/modals/TeacherLoginModal';
 import { ClassAccessView } from './components/views/ClassAccessView';
@@ -156,12 +158,6 @@ function MainApp() {
       }
       setHasEnteredMissionMap(true);
     }
-    // Rute lama Presentasi dan Refleksi diarahkan ke halaman Hasil.
-    if (view === 'presentasi' || view === 'refleksi') {
-      setCurrentView('evaluasi');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      return;
-    }
 
     if (
       ['misi', 'misi-detail'].includes(view) &&
@@ -196,9 +192,9 @@ function MainApp() {
     <div className="min-h-screen flex flex-col bg-[#FAF8F5] text-[#2D231E]">
       <BackgroundMusic active={!musicBlockedForPractice && (showRoleLanding || currentView === 'beranda')} enabled={musicEnabled} />
       {(showRoleLanding || currentView === 'beranda') && (
-        <button type="button" onClick={() => setMusicEnabled((enabled) => !enabled)} aria-label={musicEnabled ? 'Matikan musik latar' : 'Nyalakan musik latar'} title={musicEnabled ? 'Matikan musik latar' : 'Nyalakan musik latar'} className="fixed bottom-5 right-4 z-50 inline-flex min-h-12 items-center gap-2 rounded-full border-2 border-white bg-[#3E2723] px-4 text-sm font-extrabold text-white shadow-xl transition hover:-translate-y-1 sm:bottom-7 sm:right-7">
+        <button type="button" onClick={() => setMusicEnabled((enabled) => !enabled)} aria-label={musicEnabled ? 'Matikan musik latar' : 'Nyalakan musik latar'} title={musicEnabled ? 'Matikan musik latar' : 'Nyalakan musik latar'} className={`fixed bottom-5 right-4 z-50 inline-flex min-h-12 items-center gap-2 rounded-full border-2 border-white bg-[#3E2723] text-sm font-extrabold text-white shadow-xl transition hover:-translate-y-1 sm:bottom-7 sm:right-7 ${showRoleLanding ? 'w-12 justify-center p-0' : 'px-4'}`}>
           {musicEnabled ? <Volume2 size={18} className="text-[#FFE082]" /> : <VolumeX size={18} />}
-          <span>{musicEnabled ? 'Musik ON' : 'Musik OFF'}</span>
+          <span className={showRoleLanding ? 'sr-only' : ''}>{musicEnabled ? 'Musik ON' : 'Musik OFF'}</span>
         </button>
       )}
       {/* Landing page sengaja hanya menampilkan pilihan peran. */}
@@ -287,7 +283,8 @@ function MainApp() {
         {currentView === 'latihan' && (
           <PracticeQuestionsView onNavigate={handleNavigate} />
         )}
-
+        {currentView === 'presentasi' && <PresentationView onNavigate={handleNavigate} />}
+        {currentView === 'refleksi' && <ReflectionView onNavigate={handleNavigate} />}
 
         {currentView === 'evaluasi' && <ResultsEvaluationView onNavigate={handleNavigate} />}
         {currentView === 'dashboard-guru' && (
@@ -321,7 +318,7 @@ function MainApp() {
           </div>
 
           <div className="text-center sm:text-right text-[#8C7A70]">
-            Problem Based Learning (PBL) · Teaching at the Right Level (TaRL) · 4 Tahap Polya · 25 Menit Investigasi
+            Teaching at the Right Level (TaRL) · 4 Tahap Polya · 25 Menit Investigasi
           </div>
         </div>
       </footer>

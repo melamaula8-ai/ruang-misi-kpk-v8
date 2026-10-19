@@ -514,7 +514,23 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       const seeded = makeDefaultLearningContent(migratedQuestions);
       setLearningContent({ draft: seeded, published: seeded });
     }
-    if (Array.isArray(data.tokens)) setGroupTokens(data.tokens);
+    if (Array.isArray(data.tokens)) {
+      setGroupTokens((previousTokens) => data.tokens.map((remoteToken: GroupToken) => {
+        const localToken = previousTokens.find((item) => item.id === remoteToken.id && item.code.toUpperCase() === remoteToken.code.toUpperCase());
+        const matchingSubmission = incomingSubmissions?.find((submission) =>
+          submission.groupId === remoteToken.id && submission.groupCode?.toUpperCase() === remoteToken.code.toUpperCase()
+        );
+        const claimedBySubmissionId = matchingSubmission?.id ||
+          (remoteToken.status === 'claimed' && localToken?.status === 'claimed' ? localToken.claimedBySubmissionId : undefined);
+        if (remoteToken.status !== 'claimed' || !claimedBySubmissionId) return remoteToken;
+        return {
+          ...remoteToken,
+          claimedAt: localToken?.claimedAt,
+          claimedBySubmissionId,
+          teamName: matchingSubmission?.team?.teamName || localToken?.teamName || '',
+        };
+      }));
+    }
     if (incomingSubmissions) {
       // Server memastikan lewat `sessionRevoked`. Menebak dari status ID kelompok bisa salah
       // (mis. tepat setelah klaim, sebelum data pertama tersimpan) dan mengeluarkan siswa tanpa sebab.
@@ -978,7 +994,9 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         // Resume existing session on this device
         setActiveSubmissionId(matchingSub.id);
         setActiveTokenCode(token.code);
-        if (token.status === 'resubmit_allowed') setGroupTokens((prev) => prev.map((item) => item.id === token.id ? { ...item, status: 'claimed', claimedBySubmissionId: matchingSub.id } : item));
+        setGroupTokens((prev) => prev.map((item) => item.id === token.id
+          ? { ...item, status: 'claimed', claimedBySubmissionId: matchingSub.id, teamName: matchingSub.team.teamName || '' }
+          : item));
         return {
           success: true,
           message: `Selamat datang kembali, ${matchingSub.team.teamName || 'Kelompok'}! Melanjutkan sesi asesmen.`,
