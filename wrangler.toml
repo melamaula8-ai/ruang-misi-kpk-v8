@@ -6,7 +6,6 @@ pages_build_output_dir = "dist"
 # JANGAN menaruh rahasia di file ini: TEACHER_SESSION_SECRET diisi sebagai Secret di dashboard Cloudflare.
 [vars]
 GOOGLE_CLIENT_ID = "599123321863-thb7ev29cl6o23pqu8k1c1k70tp0ujbn.apps.googleusercontent.com"
-TEACHER_USERNAME = "karyainovasi"
 
 [[d1_databases]]
 binding = "DB"
