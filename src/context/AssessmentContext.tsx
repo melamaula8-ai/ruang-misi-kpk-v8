@@ -213,12 +213,13 @@ function generateUniqueGroupCode(existingCodes: Set<string>, prefix: string = 'K
   return `${prefix}-${Date.now().toString(36).toUpperCase().slice(-5)}`;
 }
 
-function createFreshSubmission(groupId?: string, groupCode?: string): AssessmentSubmission {
+export function createFreshSubmission(groupId?: string, groupCode?: string, classId?: string): AssessmentSubmission {
   const id = 'sub_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
   return {
     id,
     groupId,
     groupCode,
+    classId,
     version: 1,
     team: {
       teamName: '',
@@ -247,6 +248,19 @@ function createFreshSubmission(groupId?: string, groupCode?: string): Assessment
       },
     ],
   };
+}
+
+export function submissionMatchesGroupToken(submission: AssessmentSubmission, token: GroupToken): boolean {
+  return submission.groupId === token.id &&
+    submission.groupCode?.toUpperCase() === token.code.toUpperCase() &&
+    submission.classId === token.classId;
+}
+
+export function findSubmissionForGroupToken(
+  submissions: AssessmentSubmission[],
+  token: GroupToken
+): AssessmentSubmission | undefined {
+  return submissions.find((submission) => submissionMatchesGroupToken(submission, token));
 }
 
 const AssessmentContext = createContext<AssessmentContextType | undefined>(undefined);
@@ -1013,9 +1027,7 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     // Check if this token was already claimed
     if (token.status === 'claimed' || token.status === 'resubmit_allowed') {
       // Check if it's the current user's session
-      const matchingSub = allSubmissions.find(
-        (s) => s.groupId === token.id || s.groupCode === token.code
-      );
+      const matchingSub = findSubmissionForGroupToken(allSubmissions, token);
 
       if (matchingSub) {
         // Resume existing session on this device
@@ -1036,7 +1048,7 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           if (response.ok) {
             const remote = await response.json();
             const remoteSubmissions = Array.isArray(remote.submissions)
-              ? remote.submissions.filter((item: AssessmentSubmission) => item.groupCode?.toUpperCase() === code)
+              ? remote.submissions.filter((item: AssessmentSubmission) => submissionMatchesGroupToken(item, token))
               : [];
             const canonicalSubmissionId = token.claimedBySubmissionId;
             const remoteSubmission = remoteSubmissions.find((item: AssessmentSubmission) => item.id === canonicalSubmissionId) || remoteSubmissions[0] || null;
@@ -1058,10 +1070,13 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       }
     }
 
-    // Token is available or resubmit_allowed -> Claim it!
-    const targetSub = activeSubmission;
-    targetSub.groupId = token.id;
-    targetSub.groupCode = token.code;
+    // A newly claimed code must never inherit the globally remembered active
+    // submission: that submission may belong to another class/group.
+    const matchingSub = findSubmissionForGroupToken(allSubmissions, token);
+    const targetSub = matchingSub
+      ? { ...matchingSub, classId: matchingSub.classId || token.classId }
+      : createFreshSubmission(token.id, token.code, token.classId);
+    const isNewSubmission = !matchingSub;
 
     // Link token with submission
     setGroupTokens((prev) =>
@@ -1078,10 +1093,14 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       )
     );
 
-    setAllSubmissions((prev) =>
-      prev.map((s) => (s.id === targetSub.id ? { ...s, groupId: token.id, groupCode: token.code } : s))
-    );
-
+    if (isNewSubmission) {
+      setAllSubmissions((prev) => [targetSub, ...prev]);
+    } else if (!matchingSub.classId && targetSub.classId) {
+      setAllSubmissions((prev) => prev.map((submission) =>
+        submission.id === targetSub.id ? targetSub : submission
+      ));
+    }
+    setActiveSubmissionId(targetSub.id);
     setActiveTokenCode(token.code);
 
     return {

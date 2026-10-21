@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit && tsc --noEmit -p tsconfig.server.json",
-    "test": "tsx --test tests/sync.test.ts tests/logic.test.ts tests/teacher-google.test.ts",
+    "test": "tsx --test tests/sync.test.ts tests/logic.test.ts tests/teacher-google.test.ts tests/submission-isolation.test.ts",
     "db:migrate:local": "npm run setup:local && wrangler d1 migrations apply ruang-misi-kpk --local",
     "db:migrate:remote": "wrangler d1 migrations apply ruang-misi-kpk --remote",
     "pages:dev": "npm run setup:local && npm run build && wrangler pages dev dist --port 8788",
