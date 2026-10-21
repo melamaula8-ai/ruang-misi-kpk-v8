@@ -183,15 +183,18 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
   const [tokenNotice, setTokenNotice] = useState('');
   const [tokenCreating, setTokenCreating] = useState(false);
   const [copiedLink, setCopiedLink] = useState('');
+  const [newlyGeneratedCodes, setNewlyGeneratedCodes] = useState<string[]>([]);
   const [exportNotice, setExportNotice] = useState('');
   const [excelDownload, setExcelDownload] = useState<ExcelDownload | null>(null);
 
   const handleGenerateClassTokens = async () => {
     if (cloudStatus !== 'online') { setTokenNotice('Database belum terhubung. Tunggu sampai status Terhubung sebelum membuat ID kelas.'); return; }
     setTokenCreating(true);
+    setNewlyGeneratedCodes([]);
     setTokenNotice('Membuat ID dan menghubungkannya dengan akun guru…');
     try {
       const created = await createGroupTokens(tokenQuantity, tokenPrefix.trim() || 'KPK');
+      setNewlyGeneratedCodes(created.map(token => token.code));
       setTokenNotice(`${created.length} ID berhasil dibuat dan terhubung ke akun guru ini. Bagikan ID atau tautan kepada kelompok yang sesuai.`);
       setCopiedLink('');
     } catch (error) {
@@ -202,6 +205,24 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
   };
 
   const getClassLink = (code: string) => `${window.location.origin}${window.location.pathname}?kelas=${encodeURIComponent(code)}`;
+
+  const handleCopyGeneratedMessage = async () => {
+    const message = [
+      'Halo adek-adek semuanya 😊',
+      'Kita hari ini akan mengisi kuis 📝✨',
+      ...newlyGeneratedCodes.flatMap((code, index) => [
+        '',
+        `Untuk kelompok ${index + 1}, silakan akses link di bawah:`,
+        getClassLink(code),
+      ]),
+    ].join('\n');
+    try {
+      await navigator.clipboard.writeText(message);
+      setTokenNotice('Pesan otomatis berhasil disalin.');
+    } catch {
+      setTokenNotice('Pesan otomatis gagal disalin. Coba gunakan browser yang mengizinkan akses clipboard.');
+    }
+  };
 
   const handleCopyClassLink = async (code: string) => {
     const link = getClassLink(code);
@@ -566,6 +587,7 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
                   </div>
                 </div>
                 <button type="button" onClick={() => void handleGenerateClassTokens()} disabled={cloudStatus !== 'online' || tokenCreating} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#FF913D] px-4 py-3 text-sm font-black text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#E9782E] disabled:cursor-not-allowed disabled:opacity-50"><KeyRound className="h-4 w-4"/> {tokenCreating ? 'Menghubungkan ID…' : `Buat ${tokenQuantity} ID Kelas`}</button>
+                {newlyGeneratedCodes.length > 0 && <button type="button" onClick={() => void handleCopyGeneratedMessage()} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#4A671E] px-4 py-3 text-sm font-extrabold text-white transition hover:bg-[#385017]"><Copy className="h-4 w-4"/> Salin pesan untuk murid</button>}
                 <p className="mt-3 text-[11px] leading-5 text-[#8C7A70]">Status database: <strong className={cloudStatus === 'online' ? 'text-[#4A671E]' : 'text-[#B7652B]'}>{cloudStatus === 'online' ? 'Terhubung' : cloudStatus === 'connecting' ? 'Menghubungkan' : 'Belum terhubung'}</strong>. Pastikan status terhubung sebelum membagikan kode ke murid.</p>
               </div>
             </div>
