@@ -177,6 +177,7 @@ export interface AssessmentSubmission {
   team: TeamIdentity;
   track: LearningTrack;
   answers: Record<string, MissionSubmissionAnswers>; // questionId -> answers
+  completedMissionIds?: string[];
   presentation: PresentationData;
   reflection: ReflectionData;
   status: AssessmentStatus;

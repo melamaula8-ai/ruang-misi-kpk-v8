@@ -18,6 +18,9 @@ import {
   migrateInnovatorProblemAnswers,
 } from '../data/questionBank';
 import { calculateLCM, addDaysToDate } from '../utils/math';
+import { isTeamIdentityComplete } from '../utils/teamIdentity';
+import { mergeGroupSubmissionsPreservingActive } from '../utils/submissionSync';
+import { addCompletedMissionId } from '../utils/missionProgress';
 
 interface AssessmentContextType {
   validateStudentClassCode: (code: string) => Promise<{ success: boolean; message: string }>;
@@ -54,6 +57,7 @@ interface AssessmentContextType {
     fieldId: string,
     value: string
   ) => void;
+  completeMission: (questionId: string) => void;
   updatePresentation: (data: Partial<PresentationData>) => void;
   updateReflection: (data: Partial<ReflectionData>) => void;
   submitAssessment: (reflection?: ReflectionData) => Promise<{ success: boolean; message: string }>;
@@ -237,6 +241,7 @@ export function createFreshSubmission(groupId?: string, groupCode?: string, clas
     },
     track: 'penjelajah',
     answers: {},
+    completedMissionIds: [],
     presentation: { ...DEFAULT_PRESENTATION },
     reflection: { ...DEFAULT_REFLECTION },
     status: 'in_progress',
@@ -592,8 +597,11 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         setActiveTokenCode('');
         setSessionDeletedNotice(true);
       } else if (incomingSubmissions.length > 0) {
-        setAllSubmissions(incomingSubmissions);
-        if (!incomingSubmissions.some((submission) => submission.id === activeSubmissionId)) {
+        const synchronizedSubmissions = isTeacherLoggedIn
+          ? incomingSubmissions
+          : mergeGroupSubmissionsPreservingActive(incomingSubmissions, allSubmissions, activeSubmissionId, activeTokenCode);
+        setAllSubmissions(synchronizedSubmissions);
+        if (!synchronizedSubmissions.some((submission) => submission.id === activeSubmissionId)) {
           setActiveSubmissionId(incomingSubmissions[0].id);
         }
       } else if (isTeacherLoggedIn) {
@@ -1307,19 +1315,42 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
     if (track === activeSubmission.track) return;
 
+    // A group has one identity shared by its mission-track submissions. Prefer the
+    // completed identity already entered for this group if an older track record is stale.
+    const groupIdentity = isTeamIdentityComplete(activeSubmission.team)
+      ? activeSubmission.team
+      : allSubmissions.find((submission) =>
+          submission.id !== activeSubmission.id &&
+          (groupCode
+            ? submission.groupCode?.toUpperCase() === groupCode.toUpperCase()
+            : submission.groupId === activeSubmission.groupId) &&
+          (!activeSubmission.classId || !submission.classId || submission.classId === activeSubmission.classId) &&
+          isTeamIdentityComplete(submission.team)
+        )?.team;
+    const copyTeam = (team: TeamIdentity) => ({
+      ...team,
+      members: team.members.map((member) => ({ ...member })),
+    });
+
     if (groupCode) {
       const existingTrackSubmission = allSubmissions.find((submission) =>
-        submission.groupCode?.toUpperCase() === groupCode.toUpperCase() && submission.track === track
+        submission.groupCode?.toUpperCase() === groupCode.toUpperCase() &&
+        (!activeSubmission.classId || !submission.classId || submission.classId === activeSubmission.classId) &&
+        submission.track === track
       );
       if (existingTrackSubmission) {
+        if (groupIdentity && !isTeamIdentityComplete(existingTrackSubmission.team)) {
+          setAllSubmissions((previous) => previous.map((submission) =>
+            submission.id === existingTrackSubmission.id
+              ? { ...submission, team: copyTeam(groupIdentity) }
+              : submission
+          ));
+        }
         setActiveSubmissionId(existingTrackSubmission.id);
       } else {
         const freshSubmission = createFreshSubmission(activeSubmission.groupId, groupCode);
         freshSubmission.classId = activeSubmission.classId;
-        freshSubmission.team = {
-          ...activeSubmission.team,
-          members: activeSubmission.team.members.map((member) => ({ ...member })),
-        };
+        freshSubmission.team = copyTeam(groupIdentity || activeSubmission.team);
         freshSubmission.track = track;
         setAllSubmissions((previous) => [freshSubmission, ...previous]);
         setActiveSubmissionId(freshSubmission.id);
@@ -1420,6 +1451,15 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         };
       })
     );
+  };
+
+  const completeMission = (questionId: string) => {
+    const targetId = effectiveActiveId;
+    setAllSubmissions((previous) => previous.map((submission) =>
+      submission.id === targetId
+        ? { ...submission, completedMissionIds: addCompletedMissionId(submission.completedMissionIds, questionId) }
+        : submission
+    ));
   };
 
   const updatePresentation = (data: Partial<PresentationData>) => {
@@ -1711,6 +1751,7 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           reviewedAt: undefined,
           publishedAt: undefined,
           answers: retainHistoryAsVersion ? sub.answers : {},
+          completedMissionIds: retainHistoryAsVersion ? sub.completedMissionIds || [] : [],
           ...(!retainHistoryAsVersion ? { resetAnswers: true } : {}),
           history: [
             ...sub.history,
@@ -1955,6 +1996,7 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         updateTeamIdentity,
         clearTeamIdentity,
         updateMissionAnswer,
+        completeMission,
         updatePresentation,
         updateReflection,
         submitAssessment,

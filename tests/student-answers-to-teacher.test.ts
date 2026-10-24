@@ -50,7 +50,8 @@ test('jawaban murid tetap terbaca guru selama penilaian dan pintu berganti', asy
   const firstId = 'student-session-penjelajah';
   assert.equal((await sync(env, 'POST', { body: { upsertTokens: [{ ...groupToken, status: 'claimed', claimedBySubmissionId: firstId }] } })).status, 200);
   const initialAnswers = { m1_penjelajah: { step1: { rina_interval: '2' }, step2: { plan: 'Daftar kelipatan' }, step3: { lcm: '12' }, step4: { check: '12' } } };
-  assert.equal((await sync(env, 'POST', { body: { upsertSubmissions: [submission(firstId, 'penjelajah', initialAnswers)] } })).status, 200);
+  const completedSubmission = { ...submission(firstId, 'penjelajah', initialAnswers), completedMissionIds: ['m1_penjelajah'] };
+  assert.equal((await sync(env, 'POST', { body: { upsertSubmissions: [completedSubmission] } })).status, 200);
 
   // A: Answers from the student's submission are visible through the teacher's sync feed.
   const teacherAfterStudent = await sync(env, 'GET', { token: teacherToken });
@@ -61,6 +62,7 @@ test('jawaban murid tetap terbaca guru selama penilaian dan pintu berganti', asy
   assert.equal((await sync(env, 'POST', { token: teacherToken, body: { upsertSubmissions: [staleTeacherCopy] } })).status, 200);
   const teacherAfterReview = await sync(env, 'GET', { token: teacherToken });
   assert.deepEqual(teacherAfterReview.body.submissions.find((row: any) => row.id === firstId)?.answers, initialAnswers);
+  assert.deepEqual(teacherAfterReview.body.submissions.find((row: any) => row.id === firstId)?.completedMissionIds, ['m1_penjelajah']);
   const studentAfterReview = await sync(env, 'GET', { query: `?groupCode=${GROUP_CODE}&sessionId=${firstId}` });
   assert.deepEqual(studentAfterReview.body.submissions.find((row: any) => row.id === firstId)?.answers, initialAnswers);
 

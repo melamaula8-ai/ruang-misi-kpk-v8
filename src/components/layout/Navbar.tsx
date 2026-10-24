@@ -34,15 +34,14 @@ export const Navbar: React.FC<Props> = ({ currentView, onNavigate, onOpenTeacher
   const navLinks = isTeacherLoggedIn
     ? [
         { id: 'beranda', label: 'Beranda', icon: BookOpen },
-        { id: 'pintu', label: 'Pintu Misi', icon: Compass },
-        { id: 'gabung-kelas', label: 'Gabung Kelas', icon: Users },
-        { id: 'misi', label: '4 Kasus', icon: Sparkles },
         { id: 'latihan', label: 'Latihan Mandiri', icon: Dumbbell },
+        { id: 'gabung-kelas', label: 'Gabung Kelas', icon: Users },
+        { id: 'pintu', label: 'Pintu Misi', icon: Compass },
         { id: 'evaluasi', label: 'Hasil', icon: Award },
       ]
     : [
-        { id: 'belajar', label: 'Materi', icon: BookOpen },
-        { id: 'latihan', label: 'Latihan Soal', icon: Dumbbell },
+        { id: 'beranda', label: 'Beranda', icon: BookOpen },
+        { id: 'latihan', label: 'Latihan Mandiri', icon: Dumbbell },
         { id: 'gabung-kelas', label: 'Gabung Kelas', icon: Users },
         { id: 'pintu', label: 'Pintu Misi', icon: Compass },
         { id: 'misi', label: '4 Kasus', icon: Sparkles },

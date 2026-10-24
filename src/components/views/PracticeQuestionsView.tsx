@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { soundManager } from '../../utils/sound';
 import { checkSimilarity } from '../../utils/math';
-import { PiketIllustration, TrafficIllustration, SportsIllustration, AgendaIllustration } from '../illustrations/Illustrations';
+import { TikoSays } from '../tiko/TikoSays';
 
 interface PracticeQuestion {
   id: number;
@@ -135,15 +135,13 @@ export const PracticeQuestionsView: React.FC<Props> = ({ onNavigate }) => {
   const isKpkCorrect = studentKpk.trim() === String(q.kpk);
   const isFinalCorrect = checkSimilarity(q.expectedFinalAnswer, studentFinalAnswer);
 
-  const PracticeArt = [PiketIllustration, TrafficIllustration, SportsIllustration, AgendaIllustration][currentIdx % 4];
-
   return (
     <div className="adventure-page max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-6">
       <section className="practice-hero relative overflow-hidden rounded-[2rem] border-2 border-white bg-gradient-to-r from-[#FFF0D2] via-[#FFFDF6] to-[#EAF7D8] p-5 shadow-lg sm:p-7">
         <div className="absolute -right-6 -top-8 h-32 w-32 rounded-full bg-[#FFE082]/50 blur-xl" aria-hidden="true" />
         <div className="relative grid items-center gap-4 sm:grid-cols-[1fr_150px]">
           <div><span className="inline-flex items-center gap-2 rounded-full bg-white/90 px-3 py-1.5 text-xs font-black text-[#8A5A1F] shadow-sm"><Calculator className="h-4 w-4"/> PEMANASAN SEBELUM MISI</span><h2 className="mt-3 text-2xl font-black leading-tight text-[#3E2723] sm:text-3xl">Ayo asah otak, Penjelajah!</h2><p className="mt-2 max-w-xl text-sm leading-6 text-[#6D5A50]">Coba satu per satu. Tidak perlu buru-buru—pikirkan polanya, tulis strategimu, lalu periksa jawabanmu.</p><div className="mt-3 flex flex-wrap gap-2 text-xs font-extrabold"><span className="rounded-full bg-white px-3 py-1.5 text-[#4A671E] shadow-sm">Belajar sambil bermain</span><span className="rounded-full bg-white px-3 py-1.5 text-[#9A5A18] shadow-sm">Boleh mencoba lagi</span></div></div>
-          <div className="mx-auto w-32 sm:w-36"><PracticeArt className="h-auto w-full drop-shadow-sm" /></div>
+          <div className="practice-tiko-stage"><TikoSays text={showAnswer ? (isKpkCorrect && isFinalCorrect ? 'Hebat! Kamu menemukan polanya!' : 'Yuk, kita periksa langkahnya bersama!') : 'Ayo pecahkan tantangan ini bersamaku!'} size={150} mood={showAnswer && isKpkCorrect && isFinalCorrect ? 'proud' : 'curious'} /></div>
         </div>
       </section>
       {/* Header */}
@@ -159,10 +157,10 @@ export const PracticeQuestionsView: React.FC<Props> = ({ onNavigate }) => {
             </span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-[#3E2723] tracking-tight mt-1">
-            Latihan Soal KPK Terpandu
+            Misi Latihan KPK bersama Tiko
           </h1>
           <p className="text-xs sm:text-sm text-[#6D5A50]">
-            Tingkat kesulitan ramah bimbingan (Penjelajah). Jawab soal, klik tombol periksa, dan pelajari pembahasan lengkapnya di bawah.
+            Baca tantangan, tulis jawaban, lalu pelajari cara menemukan KPK bersama Tiko.
           </p>
         </div>
 
@@ -180,7 +178,7 @@ export const PracticeQuestionsView: React.FC<Props> = ({ onNavigate }) => {
 
       {/* Main Practice Card */}
       <div className="practice-question-card rounded-[1.75rem] border-2 border-white bg-white p-5 shadow-xl shadow-[#95634F]/10 sm:p-8 space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#EAE3D9] pb-3">
+        <div className="practice-question-top flex flex-wrap items-center justify-between gap-2 border-b border-[#EAE3D9] pb-3">
           <span className="text-xs font-extrabold uppercase px-2.5 py-1 rounded bg-[#FFE082]/40 text-[#6F4736]">
             Soal {currentIdx + 1} dari {PRACTICE_BANK.length}
           </span>
@@ -188,6 +186,9 @@ export const PracticeQuestionsView: React.FC<Props> = ({ onNavigate }) => {
             Konteks: {q.unit === 'detik' ? 'Waktu Detik' : 'Kalender Hari'}
           </span>
         </div>
+
+        <div className="practice-progress-track" role="progressbar" aria-label="Progres latihan" aria-valuemin={1} aria-valuemax={PRACTICE_BANK.length} aria-valuenow={currentIdx + 1}><span style={{ width: `${((currentIdx + 1) / PRACTICE_BANK.length) * 100}%` }} /></div>
+        <div className="practice-route" aria-label={`Tantangan ${currentIdx + 1} dari ${PRACTICE_BANK.length}`}>{PRACTICE_BANK.map((item, index) => <span key={item.id} className={index === currentIdx ? 'is-current' : index < currentIdx ? 'is-passed' : ''}>{index + 1}</span>)}</div>
 
         {/* Story */}
         <div className="space-y-2">

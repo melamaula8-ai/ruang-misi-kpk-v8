@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, ArrowRight, Award, Check, Clock3, Home, LockKeyhole, Timer } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Award, Check, Clock3, LockKeyhole, Timer } from 'lucide-react';
 import { useAssessment } from '../../context/AssessmentContext';
 import { soundManager } from '../../utils/sound';
 import { consumeMissionCelebration } from '../../utils/missionCelebration';
+import { isMissionMarkedComplete } from '../../utils/missionProgress';
 import { MissionCelebrationOverlay } from './MissionCelebrationOverlay';
 
 interface Props {
@@ -37,7 +38,8 @@ export const MissionsHubView: React.FC<Props> = ({ onNavigate, onSelectMission }
     const totalFields = steps.reduce((count, [, fields]) => count + fields.length, 0);
     const filledCount = steps.reduce((count, [step, fields]) =>
       count + fields.filter((field) => Boolean(answers?.[step]?.[field.id]?.trim())).length, 0);
-    const isComplete = activeSubmission.status === 'results_published' ||
+    const isComplete = isMissionMarkedComplete(activeSubmission.completedMissionIds, question.id) ||
+      activeSubmission.status === 'results_published' ||
       activeSubmission.status === 'submitted_pending_review' ||
       activeSubmission.status === 'time_expired_pending_review' ||
       (totalFields > 0 && (
@@ -115,16 +117,6 @@ export const MissionsHubView: React.FC<Props> = ({ onNavigate, onSelectMission }
 
   return (
     <div className="mission-map-shell">
-      <header className="mission-map-header">
-        <div className="mission-map-brand">
-          <img src="/app_logo.jpg" alt="" className="mission-map-logo" />
-          <span>Ruang Misi KPK</span>
-        </div>
-        <button type="button" className="mission-map-home" onClick={() => { soundManager.playClick(); onNavigate('beranda'); }}>
-          <Home size={17} aria-hidden="true" /><span>Halaman Utama</span>
-        </button>
-      </header>
-
       <main className="mission-map-main" aria-label="Peta misi siswa">
         <section className="mission-map-hero">
           <div className="mission-map-hero-art"><img src="/assets/elephant.png" alt="Tiko, gajah biru teman petualangan" /></div>

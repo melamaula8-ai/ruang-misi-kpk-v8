@@ -5,6 +5,8 @@ import {
   findSubmissionForGroupToken,
 } from '../src/context/AssessmentContext';
 import type { AssessmentSubmission, GroupToken } from '../src/types';
+import { mergeGroupSubmissionsPreservingActive } from '../src/utils/submissionSync';
+import { findCompleteGroupIdentity } from '../src/utils/groupIdentity';
 
 const groupA: GroupToken = {
   id: 'group-a', code: 'KPK-A-11', classId: 'class-a',
@@ -89,4 +91,43 @@ test('kode unik yang sama tetapi classId berbeda tetap terisolasi', () => {
   assert.equal(findSubmissionForGroupToken([savedA], tokenB), undefined);
   assert.equal(findSubmissionForGroupToken([savedA, savedB], tokenA)?.id, 'submission-a');
   assert.equal(findSubmissionForGroupToken([savedA, savedB], tokenB)?.id, 'submission-b');
+});
+
+test('sinkronisasi mempertahankan submission pintu aktif yang belum sempat tersimpan di server', () => {
+  const token = { ...groupA, code: 'KPK-ACTIVE-88' };
+  const remotePreviousTrack = submission(token, 'submission-previous', 'Tim A', ['Ayu', 'Bima', 'Citra']);
+  const activeNewTrack = {
+    ...submission(token, 'submission-active', 'Tim A', ['Ayu', 'Bima', 'Citra']),
+    track: 'pengembang' as const,
+  };
+
+  const merged = mergeGroupSubmissionsPreservingActive(
+    [remotePreviousTrack],
+    [activeNewTrack, remotePreviousTrack],
+    activeNewTrack.id,
+    token.code.toLowerCase(),
+  );
+
+  assert.deepEqual(merged.map((item) => item.id), ['submission-active', 'submission-previous']);
+  assert.equal(merged[0].team.teamName, 'Tim A');
+  assert.equal(merged[0].track, 'pengembang');
+});
+
+test('identitas lengkap dipakai lintas pintu untuk kelompok yang sama, tidak lintas kelas', () => {
+  const currentToken = { ...groupA, code: 'KPK-TEAM-55' };
+  const oldTrack = submission(currentToken, 'old-track', 'Tim Juara', ['Ayu', 'Bima', 'Citra']);
+  const activeTrack = {
+    ...createFreshSubmission(currentToken.id, currentToken.code, currentToken.classId),
+    id: 'active-track',
+    track: 'pengembang' as const,
+  };
+  const otherClass = submission(
+    { ...groupB, code: currentToken.code },
+    'other-class',
+    'Kelompok Lain',
+    ['Dara', 'Eko', 'Fani'],
+  );
+
+  assert.equal(findCompleteGroupIdentity([activeTrack, oldTrack], activeTrack)?.teamName, 'Tim Juara');
+  assert.equal(findCompleteGroupIdentity([activeTrack, otherClass], activeTrack)?.teamName, undefined);
 });

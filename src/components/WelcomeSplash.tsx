@@ -3,12 +3,13 @@ import { ArrowRight, Volume2, VolumeX } from 'lucide-react';
 
 interface WelcomeSplashProps {
   onStart: () => void;
+  isExiting: boolean;
   musicEnabled: boolean;
   onToggleMusic: () => void;
 }
 
-export const WelcomeSplash: React.FC<WelcomeSplashProps> = ({ onStart, musicEnabled, onToggleMusic }) => (
-  <main className="welcome-splash" aria-labelledby="welcome-splash-title">
+export const WelcomeSplash: React.FC<WelcomeSplashProps> = ({ onStart, isExiting, musicEnabled, onToggleMusic }) => (
+  <main className={`welcome-splash${isExiting ? ' is-leaving' : ''}`} aria-labelledby="welcome-splash-title" aria-busy={isExiting}>
     <button type="button" onClick={onToggleMusic} className="welcome-splash-music" aria-label={musicEnabled ? 'Matikan musik latar' : 'Nyalakan musik latar'} title={musicEnabled ? 'Matikan musik latar' : 'Nyalakan musik latar'}>
       {musicEnabled ? <Volume2 size={18} aria-hidden="true" /> : <VolumeX size={18} aria-hidden="true" />}
       <span>Musik {musicEnabled ? 'ON' : 'OFF'}</span>
@@ -35,8 +36,8 @@ export const WelcomeSplash: React.FC<WelcomeSplashProps> = ({ onStart, musicEnab
       <p className="welcome-splash-eyebrow">RUANG BELAJAR MATEMATIKA KELAS V</p>
       <h1 id="welcome-splash-title">Selamat datang!</h1>
       <p className="welcome-splash-copy">Siapkan dirimu untuk menemukan pola dan menyelesaikan misi KPK.</p>
-      <button className="welcome-splash-start" type="button" onClick={onStart}>
-        AYO MULAI BERPETUALANG <ArrowRight size={20} aria-hidden="true" />
+      <button className="welcome-splash-start" type="button" onClick={onStart} disabled={isExiting}>
+        {isExiting ? 'TIKO MEMBUKA PETUALANGAN...' : 'AYO MULAI BERPETUALANG'} <ArrowRight size={20} aria-hidden="true" />
       </button>
       <p className="welcome-splash-credit">Web aplikasi ini dibuat oleh <strong>Mela Minkhatul Maula</strong></p>
     </div>

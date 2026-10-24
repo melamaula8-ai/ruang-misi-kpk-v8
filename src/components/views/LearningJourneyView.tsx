@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, BookOpen, Calculator, CalendarDays, Check, ChevronDown, GitBranch, PencilLine, Search, Send, Sparkles } from 'lucide-react';
 import type { LearningContent } from '../../context/AssessmentContext';
 
@@ -26,11 +26,21 @@ const polyaSteps = [
 
 export const LearningJourneyView: React.FC<Props> = ({ step, maxStep, content, trackName, onStepChange, onStart }) => {
   const track = content.tracks[trackName as keyof LearningContent['tracks']] ?? content.tracks.penjelajah;
+  const previousStep = useRef(step);
   const [activePolya, setActivePolya] = useState(0);
   const [showNumberLine, setShowNumberLine] = useState(true);
   const [activeGoal, setActiveGoal] = useState(0);
   const [selectedDay, setSelectedDay] = useState(12);
   const [activeInstruction, setActiveInstruction] = useState(0);
+
+  useEffect(() => {
+    if (previousStep.current === step) return;
+    previousStep.current = step;
+    window.scrollTo({
+      top: 0,
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+    });
+  }, [step]);
 
   const instructions = [
     { title: 'Baca ceritanya', description: content.instructions, Icon: BookOpen, nudge: 'Cari angka yang menunjukkan seberapa sering kegiatan itu berulang.' },

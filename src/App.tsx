@@ -23,14 +23,47 @@ import { LoadingIndicator } from './components/LoadingIndicator';
 import { WelcomeSplash } from './components/WelcomeSplash';
 import { LearningJourneyView } from './components/views/LearningJourneyView';
 
+let sharedBackgroundAudio: HTMLAudioElement | null = null;
+
+function getBackgroundAudio() {
+  if (!sharedBackgroundAudio && typeof Audio !== 'undefined') {
+    sharedBackgroundAudio = new Audio('/music/musik-latar.mp3');
+    sharedBackgroundAudio.loop = true;
+    sharedBackgroundAudio.preload = 'auto';
+    sharedBackgroundAudio.playsInline = true;
+    sharedBackgroundAudio.volume = 0.28;
+  }
+  return sharedBackgroundAudio;
+}
+
+function startBackgroundMusic() {
+  const audio = getBackgroundAudio();
+  if (!audio) return;
+  audio.muted = false;
+  audio.volume = 0.28;
+  if (audio.paused) void audio.play().catch(() => undefined);
+}
+
+const PERSISTED_STUDENT_VIEWS = new Set([
+  'beranda', 'belajar', 'kelas', 'pintu', 'identitas', 'misi', 'countdown',
+  'misi-detail', 'latihan', 'presentasi', 'refleksi', 'evaluasi',
+]);
+
+function getPersistedStudentView() {
+  try {
+    const saved = sessionStorage.getItem('ruang_misi_kpk_current_view');
+    return saved && PERSISTED_STUDENT_VIEWS.has(saved) ? saved : 'beranda';
+  } catch {
+    return 'beranda';
+  }
+}
+
 function BackgroundMusic({ active, enabled }: { active: boolean; enabled: boolean }) {
-  const audioRef = React.useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
-    const audio = audioRef.current;
+    const audio = getBackgroundAudio();
     if (!audio) return;
 
-    audio.volume = 0.28;
     if (!active || !enabled) {
       audio.pause();
       return;
@@ -38,11 +71,7 @@ function BackgroundMusic({ active, enabled }: { active: boolean; enabled: boolea
 
     // Coba mulai segera saat web dibuka. Browser tertentu membatasi autoplay bersuara;
     // jika diblokir, coba lagi pada interaksi pertama pengguna.
-    const tryPlay = () => {
-      void audio.play().catch(() => {
-        // Autoplay bersuara dapat ditolak browser sebelum interaksi pengguna.
-      });
-    };
+    const tryPlay = () => startBackgroundMusic();
 
     tryPlay();
     const resumeAfterInteraction = () => {
@@ -64,27 +93,35 @@ function BackgroundMusic({ active, enabled }: { active: boolean; enabled: boolea
     };
   }, [active, enabled]);
 
-  return <audio ref={audioRef} src="/music/musik-latar.mp3" loop preload="auto" autoPlay aria-hidden="true" />;
+  return null;
 }
 
 function MainApp() {
   const {
     isTeacherLoggedIn,
+    logoutTeacher,
     currentTrack,
     learningContent,
-    hasTimeExpired,
     hasVerifiedGroupToken,
     activeSubmission,
     cloudStatus,
     sessionDeletedNotice,
     dismissSessionDeletedNotice,
   } = useAssessment();
-  const [currentView, setCurrentView] = useState<string>('beranda');
+  const [currentView, setCurrentView] = useState<string>(getPersistedStudentView);
   const [showWelcomeSplash, setShowWelcomeSplash] = useState(true);
+  const [welcomeTransitioning, setWelcomeTransitioning] = useState(false);
   const [showRoleLanding, setShowRoleLanding] = useState(true);
   const [roleEntryLoading, setRoleEntryLoading] = useState<'student' | 'teacher' | null>(null);
   const roleEntryStartedAt = React.useRef(0);
-  const [activeMissionNumber, setActiveMissionNumber] = useState(1);
+  const [activeMissionNumber, setActiveMissionNumber] = useState(() => {
+    try {
+      const saved = Number(sessionStorage.getItem('ruang_misi_kpk_active_mission'));
+      return Number.isInteger(saved) && saved >= 1 && saved <= 4 ? saved : 1;
+    } catch {
+      return 1;
+    }
+  });
   const [showAnswerPreview, setShowAnswerPreview] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [classCodeFromLink] = useState(() => {
@@ -98,6 +135,31 @@ function MainApp() {
   const [maxLearningStep, setMaxLearningStep] = useState(1);
   const [learningJourneyComplete, setLearningJourneyComplete] = useState(false);
   const [hasOpenedPractice, setHasOpenedPractice] = useState(false);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('ruang_misi_kpk_current_view', currentView);
+      sessionStorage.setItem('ruang_misi_kpk_active_mission', String(activeMissionNumber));
+    } catch {
+      // Sesi navigasi tetap berjalan meski penyimpanan browser tidak tersedia.
+    }
+  }, [currentView, activeMissionNumber]);
+
+  const startAdventure = () => {
+    if (welcomeTransitioning) return;
+    if (musicEnabled) startBackgroundMusic();
+    setWelcomeTransitioning(true);
+    window.setTimeout(() => {
+      setShowWelcomeSplash(false);
+      setWelcomeTransitioning(false);
+    }, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 80 : 650);
+  };
+
+  const toggleWelcomeMusic = () => {
+    if (musicEnabled) getBackgroundAudio()?.pause();
+    else startBackgroundMusic();
+    setMusicEnabled((enabled) => !enabled);
+  };
 
   useEffect(() => {
     const playClickForButton = (event: MouseEvent) => {
@@ -124,7 +186,7 @@ function MainApp() {
         setMaxLearningStep(1);
         setLearningJourneyComplete(false);
         setHasOpenedPractice(false);
-        setCurrentView('beranda');
+        if (currentView === 'misi' || currentView === 'misi-detail') setHasEnteredMissionMap(true);
         window.scrollTo({ top: 0, behavior: 'smooth' });
       } else if (isTeacherLoggedIn) {
         setShowRoleLanding(false);
@@ -135,19 +197,17 @@ function MainApp() {
       setRoleEntryLoading(null);
     }, remainingMinimum);
     return () => window.clearTimeout(timer);
-  }, [roleEntryLoading, cloudStatus, isTeacherLoggedIn]);
+  }, [roleEntryLoading, cloudStatus, isTeacherLoggedIn, currentView]);
 
   const beginRoleEntry = (role: 'student' | 'teacher') => {
     if (roleEntryLoading) return;
+    if (role === 'student' && isTeacherLoggedIn) logoutTeacher();
     roleEntryStartedAt.current = Date.now();
     setRoleEntryLoading(role);
   };
 
   // Halaman yang hanya boleh dibuka siswa yang sudah memverifikasi ID Kelompok.
-  const STUDENT_SESSION_VIEWS = ['pintu', 'identitas', 'misi', 'countdown', 'misi-detail'];
-  // Halaman kelanjutan misi: identitas kelompok wajib lengkap lebih dulu.
-  const IDENTITY_REQUIRED_VIEWS = ['misi', 'countdown', 'misi-detail'];
-
+  const STUDENT_SESSION_VIEWS = ['pintu', 'identitas', 'misi', 'countdown', 'misi-detail', 'evaluasi'];
   useEffect(() => {
     if (
       !isTeacherLoggedIn &&
@@ -161,19 +221,6 @@ function MainApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cloudStatus, currentView, hasVerifiedGroupToken, isTeacherLoggedIn, sessionDeletedNotice]);
 
-  // Penjaga terakhir: apa pun jalur masuknya (menu, tombol, sinkronisasi dari perangkat lain),
-  // siswa tidak bisa berada di halaman misi bila identitas kelompok belum lengkap.
-  // Akses halaman misi tetap memerlukan identitas kelompok yang lengkap.
-  useEffect(() => {
-    if (isTeacherLoggedIn || !hasVerifiedGroupToken) return;
-    if (!IDENTITY_REQUIRED_VIEWS.includes(currentView)) return;
-    if (!isTeamIdentityComplete(activeSubmission.team)) {
-      setCurrentView('identitas');
-      setIdentityValidationAttempt((attempt) => attempt + 1);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentView, activeSubmission.team, activeSubmission.status, hasTimeExpired, hasVerifiedGroupToken, isTeacherLoggedIn]);
-
   // Pemberitahuan sesi dihapus hilang sendiri begitu siswa memverifikasi ID untuk sesi baru.
   useEffect(() => {
     if (hasVerifiedGroupToken && sessionDeletedNotice) dismissSessionDeletedNotice();
@@ -186,7 +233,7 @@ function MainApp() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleNavigate = (view: string, identityValidated = false) => {
+  const handleNavigate = (view: string) => {
     soundManager.playClick();
     if (view === 'gabung-kelas') view = 'kelas';
     if (view === 'halaman-utama') {
@@ -207,29 +254,23 @@ function MainApp() {
       return;
     }
 
-    // Section A2: Guard student missions behind verified Group ID
-    if (['pintu', 'identitas', 'misi', 'countdown', 'misi-detail'].includes(view) && !hasVerifiedGroupToken) {
+    // Peta dan form kasus hanya mensyaratkan ID kelompok yang sudah diverifikasi.
+    // Identitas tim tetap dapat dilengkapi dari jalur pengenalan, tanpa mengunci akses misi.
+    if (['pintu', 'identitas', 'misi', 'countdown', 'misi-detail', 'evaluasi'].includes(view) && !hasVerifiedGroupToken) {
       setCurrentView('kelas');
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
-    if (['misi', 'misi-detail'].includes(view) && !hasEnteredMissionMap) {
-      if (currentView !== 'pintu') {
-        setCurrentView('pintu');
+    if (view === 'misi-detail' && !hasEnteredMissionMap) {
+      if (currentView !== 'misi') {
+        setCurrentView('misi');
+        setHasEnteredMissionMap(true);
         window.scrollTo({ top: 0, behavior: 'smooth' });
         return;
       }
-      setHasEnteredMissionMap(true);
     }
 
-    if (
-      ['misi', 'misi-detail'].includes(view) &&
-      !identityValidated &&
-      !isTeamIdentityComplete(activeSubmission.team)
-    ) {
-      returnToIncompleteIdentity();
-      return;
-    }
+    if (view === 'misi') setHasEnteredMissionMap(true);
 
     if (view === 'latihan') setMusicBlockedForPractice(true);
     setCurrentView(view);
@@ -242,17 +283,13 @@ function MainApp() {
       setCurrentView('kelas');
       return;
     }
-    if (!isTeamIdentityComplete(activeSubmission.team)) {
-      returnToIncompleteIdentity();
-      return;
-    }
     setActiveMissionNumber(missionNum);
     setCurrentView('countdown');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleCountdownComplete = () => {
-    // Countdown is only reachable after class and team identity checks in handleSelectMission.
+    // Countdown is only reachable after the group token check in handleSelectMission.
     // Enter the selected student's assessment directly after the rocket animation finishes.
     setHasEnteredMissionMap(true);
     setCurrentView('misi-detail');
@@ -284,7 +321,7 @@ function MainApp() {
 
   if (showWelcomeSplash) return <>
     <BackgroundMusic active enabled={musicEnabled} />
-    <WelcomeSplash onStart={() => setShowWelcomeSplash(false)} musicEnabled={musicEnabled} onToggleMusic={() => setMusicEnabled((enabled) => !enabled)} />
+    <WelcomeSplash onStart={startAdventure} isExiting={welcomeTransitioning} musicEnabled={musicEnabled} onToggleMusic={toggleWelcomeMusic} />
   </>;
 
   return (
@@ -297,15 +334,15 @@ function MainApp() {
         </button>
       )}
       {/* Landing page sengaja hanya menampilkan pilihan peran. */}
-      {!showRoleLanding && currentView !== 'misi' && (
+      {!showRoleLanding && (
         <>
-        <div className="border-b border-[#F0E4D7] bg-[#FFF7DC] px-4 py-2">
+        {currentView !== 'misi' && <div className="border-b border-[#F0E4D7] bg-[#FFF7DC] px-4 py-2">
           <div className="mx-auto flex max-w-7xl justify-start">
             <button type="button" onClick={() => handleNavigate('halaman-utama')} className="inline-flex items-center gap-2 rounded-full border border-[#E8D6B8] bg-white px-4 py-2 text-sm font-extrabold text-[#704A36] shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-4 focus:ring-[#FFE082]/60">
               <House size={16} /> Halaman Utama
             </button>
           </div>
-        </div>
+        </div>}
         <Navbar
           currentView={currentView}
           onNavigate={handleNavigate}

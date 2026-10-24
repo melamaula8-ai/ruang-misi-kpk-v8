@@ -469,7 +469,7 @@ async function handlePost(request: Request, env: Env, teacherIdentity: string | 
         if (stored) {
           const resetAnswers = row.resetAnswers === true && ['reopened', 'in_progress'].includes(String(row.status));
           const studentFields = [
-            'answers', 'team', 'presentation', 'reflection', 'track', 'groupId', 'groupCode', 'classId',
+            'answers', 'completedMissionIds', 'team', 'presentation', 'reflection', 'track', 'groupId', 'groupCode', 'classId',
             'startedAt', 'timerStartedAtTimestamp', 'targetEndTimestamp', 'isTimerRunning', 'submittedAt',
           ];
           for (const key of studentFields) {
