@@ -25,6 +25,7 @@ import {
   Link2,
   Copy,
   Check,
+  LoaderCircle,
 } from 'lucide-react';
 import {
   LearningTrack,
@@ -47,6 +48,7 @@ interface Props {
 export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
   const {
     logoutTeacher,
+    isTeacherLoggedIn,
     allSubmissions,
     activeSubmissionId,
     switchActiveSubmission,
@@ -67,6 +69,7 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
     createGroupTokens,
     toggleGroupTokenStatus,
     deleteGroupToken,
+    removeExamSessionData,
     cloudStatus,
     learningContent,
     saveLearningDraft,
@@ -178,22 +181,78 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
     success: boolean;
     message: string;
   } | null>(null);
+  const [groupAction, setGroupAction] = useState('');
+  const runGroupAction = (id: string, action: () => void) => {
+    setGroupAction(id);
+    action();
+    window.setTimeout(() => setGroupAction((current) => current === id ? '' : current), 500);
+  };
   const [tokenQuantity, setTokenQuantity] = useState(5);
   const [tokenPrefix, setTokenPrefix] = useState('KPK');
   const [tokenNotice, setTokenNotice] = useState('');
   const [tokenCreating, setTokenCreating] = useState(false);
   const [copiedLink, setCopiedLink] = useState('');
   const [newlyGeneratedCodes, setNewlyGeneratedCodes] = useState<string[]>([]);
+  const [examSessions, setExamSessions] = useState<Array<{ id: string; name: string; joinCode: string; status: string; createdAt: number; groupCount: number; participantCount: number }>>([]);
+  const [selectedExamSessionId, setSelectedExamSessionId] = useState('');
+  const [newExamSessionName, setNewExamSessionName] = useState('');
+  const [examSessionNotice, setExamSessionNotice] = useState('');
+  const [deletingExamSessionId, setDeletingExamSessionId] = useState('');
+  const selectedExamSession = examSessions.find(session => session.id === selectedExamSessionId);
+  const sessionGroupTokens = groupTokens.filter(token => token.classId === selectedExamSessionId);
+  const sessionGroups = sessionGroupTokens.map(token => ({
+    token,
+    submissions: groupedSubmissions.find(group => group.some(submission =>
+      submission.groupId === token.id || submission.groupCode?.toUpperCase() === token.code.toUpperCase()
+    )) || [],
+  }));
+  const sessionSubmissions = sessionGroups.flatMap(group => group.submissions);
+  React.useEffect(() => {
+    if (!isTeacherLoggedIn) return;
+    fetch('/api/classes', { headers: { Accept: 'application/json', Authorization: `Bearer ${sessionStorage.getItem('ruang_misi_kpk_teacher_token') || ''}` }, cache: 'no-store' })
+      .then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Sesi ujian gagal dimuat.'); setExamSessions(data.classes || []); })
+      .catch(error => setExamSessionNotice(error instanceof Error ? error.message : 'Sesi ujian gagal dimuat.'));
+  }, [isTeacherLoggedIn]);
+  const handleCreateExamSession = async () => {
+    const name = newExamSessionName.trim();
+    if (name.length < 3) { setExamSessionNotice('Nama sesi ujian minimal 3 karakter.'); return; }
+    try {
+      const response = await fetch('/api/classes', { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${sessionStorage.getItem('ruang_misi_kpk_teacher_token') || ''}` }, body: JSON.stringify({ name }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Sesi ujian gagal dibuat.');
+      const session = { ...data.class, createdAt: data.class.createdAt || Date.now(), groupCount: 0, participantCount: 0 };
+      setExamSessions(previous => [session, ...previous]); setSelectedExamSessionId(session.id); setNewExamSessionName(''); setExamSessionNotice('Sesi ujian berhasil dibuat.');
+    } catch (error) { setExamSessionNotice(error instanceof Error ? error.message : 'Sesi ujian gagal dibuat.'); }
+  };
+  const handleDeleteExamSession = async (session: { id: string; name: string }) => {
+    const confirmed = window.confirm(`Hapus sesi "${session.name}" secara permanen? Semua ID kelompok, status pengerjaan, jawaban, dan hasil penilaian dalam sesi ini akan ikut dihapus dan tidak dapat dipulihkan.`);
+    if (!confirmed) return;
+    setDeletingExamSessionId(session.id);
+    try {
+      const response = await fetch('/api/classes', { method: 'DELETE', headers: { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${sessionStorage.getItem('ruang_misi_kpk_teacher_token') || ''}` }, body: JSON.stringify({ id: session.id }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Sesi ujian gagal dihapus.');
+      removeExamSessionData(session.id);
+      setExamSessions(previous => previous.filter(item => item.id !== session.id));
+      setSelectedExamSessionId(current => current === session.id ? '' : current);
+      setNewlyGeneratedCodes([]);
+      setTokenNotice('');
+      setExamSessionNotice(`Sesi "${session.name}" beserta semua ID kelompok dan data pengerjaannya telah dihapus permanen.`);
+    } catch (error) { setExamSessionNotice(error instanceof Error ? error.message : 'Sesi ujian gagal dihapus.'); }
+    finally { setDeletingExamSessionId(''); }
+  };
   const [exportNotice, setExportNotice] = useState('');
   const [excelDownload, setExcelDownload] = useState<ExcelDownload | null>(null);
 
   const handleGenerateClassTokens = async () => {
+    if (!selectedExamSessionId) { setTokenNotice('Pilih atau buat sesi ujian terlebih dahulu.'); return; }
     if (cloudStatus !== 'online') { setTokenNotice('Database belum terhubung. Tunggu sampai status Terhubung sebelum membuat ID kelas.'); return; }
     setTokenCreating(true);
     setNewlyGeneratedCodes([]);
     setTokenNotice('Membuat ID dan menghubungkannya dengan akun guru…');
     try {
-      const created = await createGroupTokens(tokenQuantity, tokenPrefix.trim() || 'KPK');
+      const created = await createGroupTokens(selectedExamSessionId, tokenQuantity, tokenPrefix.trim() || 'KPK');
+      setExamSessions(previous => previous.map(session => session.id === selectedExamSessionId ? { ...session, groupCount: (session.groupCount || 0) + created.length } : session));
       setNewlyGeneratedCodes(created.map(token => token.code));
       setTokenNotice(`${created.length} ID berhasil dibuat dan terhubung ke akun guru ini. Bagikan ID atau tautan kepada kelompok yang sesuai.`);
       setCopiedLink('');
@@ -535,7 +594,7 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
           { id: 'ringkasan' as const, label: 'Ikhtisar', icon: BookOpen },
           { id: 'penilaian' as const, label: 'Pemeriksaan & Rubrik', icon: Award },
           { id: 'kelompok' as const, label: 'Pengaturan Kelas', icon: Sliders },
-          { id: 'akses_kelas' as const, label: 'ID Kelas', icon: KeyRound },
+          { id: 'akses_kelas' as const, label: 'Sesi Ujian', icon: KeyRound },
           { id: 'editor' as const, label: 'Materi & Soal', icon: BookOpen },
           { id: 'rubrik' as const, label: 'Rubrik', icon: Sliders },
           { id: 'rekap' as const, label: 'Ekspor Nilai', icon: Download },
@@ -545,7 +604,7 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
           return (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => { setActiveTab(tab.id); if (tab.id === 'ringkasan') setSelectedExamSessionId(''); }}
               className={`flex items-center gap-2 py-3 px-4 text-xs font-bold whitespace-nowrap border-b-2 transition-all cursor-pointer ${
                 isActive
                   ? 'border-[#FF913D] text-[#3E2723] bg-white rounded-t-xl'
@@ -564,12 +623,18 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
       {/* TAB: ID DAN LINK KELAS */}
       {activeTab === 'akses_kelas' && (
         <div className="space-y-6">
+          <section className="space-y-5 rounded-2xl border border-[#EAE3D9] bg-white p-5 shadow-sm sm:p-6">
+            <div><h2 className="text-xl font-black text-[#3E2723]">Sesi Ujian</h2><p className="mt-1 text-sm text-[#6D5A50]">Buat sesi terlebih dahulu, lalu buka sesi untuk mengelola kelompok dan akses murid.</p></div>
+            <div className="flex flex-col gap-2 sm:flex-row"><input value={newExamSessionName} onChange={event => setNewExamSessionName(event.target.value)} maxLength={100} placeholder="Nama sesi, misalnya Asesmen Kelas 5A" className="min-w-0 flex-1 rounded-xl border border-[#D8CFC8] bg-[#FFFCF7] px-3 py-2.5 text-sm font-semibold text-[#3E2723]"/><button type="button" onClick={() => void handleCreateExamSession()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#FF913D] px-4 py-2.5 text-sm font-black text-white"><Plus className="h-4 w-4"/>Buat Sesi Ujian</button></div>
+            {examSessionNotice && <p role="status" className="rounded-lg bg-[#F4F9E9] px-3 py-2 text-sm font-semibold text-[#42631D]">{examSessionNotice}</p>}
+            {examSessions.length === 0 ? <div className="rounded-xl border-2 border-dashed border-[#E8D8CE] p-7 text-center text-sm text-[#6D5A50]">Belum ada sesi ujian. Buat sesi untuk mulai mendaftarkan kelompok.</div> : <div className="grid gap-3 md:grid-cols-2">{examSessions.map(session => <article key={session.id} className="flex min-w-0 items-stretch gap-2"><button type="button" onClick={() => setSelectedExamSessionId(session.id)} className={`min-w-0 flex-1 rounded-xl border p-4 text-left transition ${selectedExamSessionId === session.id ? 'border-[#FF913D] bg-[#FFF7EE] ring-2 ring-[#FF913D]/20' : 'border-[#EAE3D9] bg-[#FFFCF7] hover:border-[#D8C4B9]'}`}><span className="flex items-center justify-between gap-2"><strong className="truncate text-[#3E2723]">{session.name}</strong><span className="shrink-0 rounded-full bg-[#F2F9E5] px-2 py-1 text-[10px] font-extrabold text-[#4A671E]">{session.status === 'active' ? 'Aktif' : session.status}</span></span><span className="mt-2 block break-all font-mono text-xs text-[#8C7A70]">ID sesi: {session.id}</span><span className="mt-2 block text-xs text-[#6D5A50]">{session.groupCount || 0} kelompok ? {session.participantCount || 0} sudah mengakses</span></button><button type="button" aria-label={`Hapus sesi ${session.name}`} title={`Hapus sesi ${session.name}`} disabled={deletingExamSessionId === session.id} onClick={() => void handleDeleteExamSession(session)} className="inline-flex shrink-0 items-center justify-center gap-1.5 self-start rounded-lg border border-red-200 bg-white px-2.5 py-2 text-xs font-bold text-red-700 hover:bg-red-50 disabled:cursor-wait disabled:opacity-50 sm:px-3"><Trash2 className="h-4 w-4"/><span className="hidden sm:inline">{deletingExamSessionId === session.id ? 'Menghapus?' : 'Hapus'}</span></button></article>)}</div>}
+          </section>
           <section className="relative overflow-hidden rounded-3xl border border-[#E8D6A5] bg-gradient-to-br from-[#FFF7D8] via-white to-[#EFF7E2] p-6 shadow-sm sm:p-8">
             <div className="absolute -right-8 -top-10 h-40 w-40 rounded-full bg-[#C5E68A]/35 blur-2xl" aria-hidden="true" />
             <div className="relative grid gap-6 lg:grid-cols-[1fr_.9fr] lg:items-center">
               <div>
                 <div className="inline-flex items-center gap-2 rounded-full border border-[#F0D9A7] bg-white/80 px-3 py-1.5 text-xs font-black text-[#795329]"><KeyRound className="h-4 w-4"/> AKSES KELAS MURID</div>
-                <h2 className="mt-3 text-2xl font-black text-[#3E2723] sm:text-3xl">Buat ID atau link kelas</h2>
+                <h2 className="mt-3 text-2xl font-black text-[#3E2723] sm:text-3xl">{selectedExamSession ? selectedExamSession.name : 'Pilih sesi ujian'}</h2>
                 <p className="mt-2 max-w-xl text-sm leading-6 text-[#6D5A50]">Buat ID unik untuk kelompok. Bagikan kode secara langsung atau salin link kelas. Murid yang membuka link tetap melihat halaman utama, mengikuti materi dan latihan, lalu sistem melewati kolom input ID saja.</p>
                 <div className="mt-4 flex flex-wrap gap-2 text-xs font-bold"><span className="rounded-full bg-white px-3 py-1.5 text-[#4A671E] ring-1 ring-[#DCE9C6]">ID unik</span><span className="rounded-full bg-white px-3 py-1.5 text-[#8C6D1F] ring-1 ring-[#F0D9A7]">Link siap dibagikan</span><span className="rounded-full bg-white px-3 py-1.5 text-[#95634F] ring-1 ring-[#E8D8CE]">Monitoring kelompok</span></div>
               </div>
@@ -586,7 +651,7 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
                     </select>
                   </div>
                 </div>
-                <button type="button" onClick={() => void handleGenerateClassTokens()} disabled={cloudStatus !== 'online' || tokenCreating} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#FF913D] px-4 py-3 text-sm font-black text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#E9782E] disabled:cursor-not-allowed disabled:opacity-50"><KeyRound className="h-4 w-4"/> {tokenCreating ? 'Menghubungkan ID…' : `Buat ${tokenQuantity} ID Kelas`}</button>
+                <button type="button" onClick={() => void handleGenerateClassTokens()} disabled={!selectedExamSessionId || cloudStatus !== 'online' || tokenCreating} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#FF913D] px-4 py-3 text-sm font-black text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#E9782E] disabled:cursor-not-allowed disabled:opacity-50"><KeyRound className="h-4 w-4"/> {tokenCreating ? 'Menghubungkan ID…' : `Buat ${tokenQuantity} Kelompok`}</button>
                 {newlyGeneratedCodes.length > 0 && <button type="button" onClick={() => void handleCopyGeneratedMessage()} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#4A671E] px-4 py-3 text-sm font-extrabold text-white transition hover:bg-[#385017]"><Copy className="h-4 w-4"/> Salin pesan untuk murid</button>}
                 <p className="mt-3 text-[11px] leading-5 text-[#8C7A70]">Status database: <strong className={cloudStatus === 'online' ? 'text-[#4A671E]' : 'text-[#B7652B]'}>{cloudStatus === 'online' ? 'Terhubung' : cloudStatus === 'connecting' ? 'Menghubungkan' : 'Belum terhubung'}</strong>. Pastikan status terhubung sebelum membagikan kode ke murid.</p>
               </div>
@@ -594,11 +659,11 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
           </section>
           {tokenNotice && <div role="status" className="rounded-xl border border-[#DCE9C6] bg-[#F4F9E9] px-4 py-3 text-sm font-semibold text-[#42631D]">{tokenNotice}</div>}
           <section className="space-y-4 rounded-2xl border border-[#EAE3D9] bg-white p-5 shadow-sm sm:p-6">
-            <div className="flex flex-wrap items-end justify-between gap-3"><div><h3 className="text-lg font-black text-[#3E2723]">Daftar ID dan link kelas</h3><p className="mt-1 text-xs text-[#6D5A50]">Salin link untuk membagikan akses. ID yang dipakai menampilkan sesi kelompok terkait.</p></div><span className="rounded-full bg-[#FAF8F5] px-3 py-1.5 text-xs font-extrabold text-[#95634F]">{groupTokens.length} ID · {groupTokens.filter(token => token.status === 'claimed').length} dipakai · {groupTokens.filter(token => token.status === 'available').length} tersedia</span></div>
-            {groupTokens.length === 0 ? <div className="rounded-2xl border-2 border-dashed border-[#E8D8CE] bg-[#FFFCF7] px-5 py-10 text-center"><KeyRound className="mx-auto h-8 w-8 text-[#95634F]"/><p className="mt-3 font-black text-[#3E2723]">Belum ada ID kelas</p><p className="mt-1 text-sm text-[#6D5A50]">Buat ID di bagian atas untuk mulai membagikan akses.</p></div> : <div className="grid gap-3 lg:grid-cols-2">{groupTokens.slice().sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).map(token => {
+            <div className="flex flex-wrap items-end justify-between gap-3"><div><h3 className="text-lg font-black text-[#3E2723]">Kelompok dalam sesi ini</h3><p className="mt-1 text-xs text-[#6D5A50]">Salin kode atau link akses untuk setiap kelompok.</p></div><span className="rounded-full bg-[#FAF8F5] px-3 py-1.5 text-xs font-extrabold text-[#95634F]">{sessionGroupTokens.length} kelompok · {sessionGroupTokens.filter(token => token.status === 'claimed').length} sudah mengakses</span></div>
+            {!selectedExamSession ? <div className="rounded-2xl border-2 border-dashed border-[#E8D8CE] bg-[#FFFCF7] px-5 py-10 text-center text-sm text-[#6D5A50]">Pilih sesi ujian terlebih dahulu untuk melihat dan membuat kelompok.</div> : sessionGroupTokens.length === 0 ? <div className="rounded-2xl border-2 border-dashed border-[#E8D8CE] bg-[#FFFCF7] px-5 py-10 text-center"><KeyRound className="mx-auto h-8 w-8 text-[#95634F]"/><p className="mt-3 font-black text-[#3E2723]">Belum ada kelompok di sesi ini</p><p className="mt-1 text-sm text-[#6D5A50]">Gunakan tombol Buat Kelompok di atas.</p></div> : <div className="grid gap-3 lg:grid-cols-2">{sessionGroupTokens.slice().sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).map(token => {
               const linkedSubmission = allSubmissions.find(submission => submission.id === token.claimedBySubmissionId || submission.groupId === token.id || submission.groupCode?.toUpperCase() === token.code.toUpperCase());
               const statusLabel = token.status === 'claimed' ? `Dipakai · ${linkedSubmission?.team.teamName || token.teamName || 'sesi kelompok terhubung'}` : token.status === 'disabled' ? 'Dinonaktifkan' : token.status === 'resubmit_allowed' ? 'Boleh mengumpulkan ulang' : 'Siap digunakan';
-              return <article key={token.id} className="rounded-2xl border border-[#EAE3D9] bg-[#FFFCF7] p-4 transition hover:border-[#D8C4B9] hover:shadow-sm"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-mono text-xl font-black tracking-wider text-[#3E2723]">{token.code}</p><p className="mt-1 text-[11px] text-[#8C7A70]">Dibuat {new Date(token.createdAt).toLocaleDateString('id-ID')}</p></div><span className={`rounded-full px-2.5 py-1 text-[10px] font-extrabold ${token.status === 'claimed' ? 'bg-[#E8D8CE] text-[#704A36]' : token.status === 'disabled' ? 'bg-red-50 text-red-700' : 'bg-[#F2F9E5] text-[#4A671E]'}`}>{statusLabel}</span></div><div className="mt-3 break-all rounded-lg border border-[#EAE3D9] bg-white px-3 py-2 text-[11px] leading-5 text-[#6D5A50]">{getClassLink(token.code)}</div><div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => void handleCopyClassLink(token.code)} className="inline-flex items-center gap-1.5 rounded-lg bg-[#95634F] px-3 py-2 text-xs font-bold text-white transition hover:bg-[#754936]">{copiedLink === token.code ? <Check className="h-3.5 w-3.5"/> : <Copy className="h-3.5 w-3.5"/>} Salin link</button><button type="button" onClick={() => void handleCopyClassCode(token.code)} className="inline-flex items-center gap-1.5 rounded-lg border border-[#D8CFC8] bg-white px-3 py-2 text-xs font-bold text-[#3E2723] hover:bg-[#FAF8F5]"><KeyRound className="h-3.5 w-3.5"/> Salin ID</button>{token.status !== 'claimed' && <button type="button" onClick={() => { toggleGroupTokenStatus(token.id, token.status === 'disabled' ? 'available' : 'disabled'); setTokenNotice(`Status ID ${token.code} diperbarui.`); }} className="rounded-lg border border-[#D8CFC8] bg-white px-3 py-2 text-xs font-bold text-[#6D5A50] hover:bg-[#FAF8F5]">{token.status === 'disabled' ? 'Aktifkan' : 'Nonaktifkan'}</button>}<button type="button" onClick={() => { const activeSessionWarning = token.status === 'claimed' ? ' Kelompok yang sedang menggunakan ID ini akan dikeluarkan; jawaban, progres, dan timer sesi ikut dihapus.' : ''; if (window.confirm(`Hapus ID ${token.code}? ID ini tidak dapat digunakan lagi.${activeSessionWarning}`)) { const result = deleteGroupToken(token.id); setTokenNotice(result.message); } }} className="rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-50">Hapus</button></div></article>;
+              return <article key={token.id} className="rounded-2xl border border-[#EAE3D9] bg-[#FFFCF7] p-4 transition hover:border-[#D8C4B9] hover:shadow-sm"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-mono text-xl font-black tracking-wider text-[#3E2723]">{token.code}</p><p className="mt-1 text-[11px] text-[#8C7A70]">Dibuat {new Date(token.createdAt).toLocaleDateString('id-ID')}</p>{linkedSubmission && <p className="mt-1 text-xs font-semibold text-[#6D5A50]">Asesmen: {linkedSubmission.status === 'results_published' ? 'Hasil diterbitkan' : linkedSubmission.status === 'submitted_pending_review' ? 'Menunggu pemeriksaan' : 'Sedang dikerjakan'}</p>}</div><span className={`rounded-full px-2.5 py-1 text-[10px] font-extrabold ${token.status === 'claimed' ? 'bg-[#E8D8CE] text-[#704A36]' : token.status === 'disabled' ? 'bg-red-50 text-red-700' : 'bg-[#F2F9E5] text-[#4A671E]'}`}>{statusLabel}</span></div><div className="mt-3 break-all rounded-lg border border-[#EAE3D9] bg-white px-3 py-2 text-[11px] leading-5 text-[#6D5A50]">{getClassLink(token.code)}</div><div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => void handleCopyClassLink(token.code)} className="inline-flex items-center gap-1.5 rounded-lg bg-[#95634F] px-3 py-2 text-xs font-bold text-white transition hover:bg-[#754936]">{copiedLink === token.code ? <Check className="h-3.5 w-3.5"/> : <Copy className="h-3.5 w-3.5"/>} Salin link</button><button type="button" onClick={() => void handleCopyClassCode(token.code)} className="inline-flex items-center gap-1.5 rounded-lg border border-[#D8CFC8] bg-white px-3 py-2 text-xs font-bold text-[#3E2723] hover:bg-[#FAF8F5]"><KeyRound className="h-3.5 w-3.5"/> Salin ID</button>{linkedSubmission && <button type="button" onClick={() => { switchActiveSubmission(linkedSubmission.id); setActiveTab('penilaian'); }} className="inline-flex items-center gap-1.5 rounded-lg bg-[#4A671E] px-3 py-2 text-xs font-bold text-white hover:bg-[#385017]">Lihat hasil asesmen</button>}{token.status !== 'claimed' && <button type="button" disabled={groupAction === `update-${token.id}`} onClick={() => runGroupAction(`update-${token.id}`, () => { toggleGroupTokenStatus(token.id, token.status === 'disabled' ? 'available' : 'disabled'); setTokenNotice(`Status ID ${token.code} diperbarui.`); })} className="inline-flex items-center gap-1 rounded-lg border border-[#D8CFC8] bg-white px-3 py-2 text-xs font-bold text-[#6D5A50] hover:bg-[#FAF8F5]">{groupAction === `update-${token.id}` && <LoaderCircle className="h-3 w-3 animate-spin"/>}{token.status === 'disabled' ? 'Aktifkan' : 'Nonaktifkan'}</button>}<button type="button" disabled={groupAction === `delete-token-${token.id}`} onClick={() => { const activeSessionWarning = token.status === 'claimed' ? ' Kelompok yang sedang menggunakan ID ini akan dikeluarkan; jawaban, progres, dan timer sesi ikut dihapus.' : ''; if (window.confirm(`Hapus ID ${token.code}? ID ini tidak dapat digunakan lagi.${activeSessionWarning}`)) runGroupAction(`delete-token-${token.id}`, () => { const result = deleteGroupToken(token.id); setTokenNotice(result.message); }); }} className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-50">{groupAction === `delete-token-${token.id}` && <LoaderCircle className="h-3 w-3 animate-spin"/>}Hapus</button></div></article>;
             })}</div>}
             <div className="flex gap-2 rounded-xl border border-[#F0D9A7] bg-[#FFF7DC] p-3 text-xs leading-5 text-[#795329]"><Link2 className="mt-0.5 h-4 w-4 shrink-0"/><span>Link kelas mempertahankan halaman pembuka yang sama. Murid tetap memilih “Masuk sebagai Murid”, mempelajari materi dan latihan, lalu ID pada link akan diverifikasi otomatis saat masuk ke halaman kelas.</span></div>
           </section>
@@ -608,11 +673,24 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
       {/* TAB 1: RINGKASAN KELAS */}
       {activeTab === 'ringkasan' && (
         <div className="space-y-6">
+          {!selectedExamSession ? <section className="rounded-2xl border border-[#EAE3D9] bg-white p-5 shadow-xs sm:p-6">
+            <div className="mb-4"><h2 className="text-lg font-black text-[#3E2723]">Sesi Ujian</h2><p className="mt-1 text-xs text-[#6D5A50]">Pilih sesi untuk melihat status pengerjaan kelompok.</p></div>
+            {examSessionNotice && <p role="status" className="mb-4 rounded-lg bg-[#F4F9E9] px-3 py-2 text-sm font-semibold text-[#42631D]">{examSessionNotice}</p>}
+            {examSessions.length === 0 ? <div className="rounded-xl border-2 border-dashed border-[#E8D8CE] p-6 text-center"><p className="text-sm text-[#6D5A50]">Belum ada sesi ujian.</p><button type="button" onClick={() => setActiveTab('akses_kelas')} className="mt-3 rounded-lg bg-[#FF913D] px-4 py-2 text-xs font-bold text-white">Buat Sesi Ujian</button></div> : <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{examSessions.map(session => {
+              const count = groupTokens.filter(token => token.classId === session.id).length;
+              return <button key={session.id} type="button" onClick={() => setSelectedExamSessionId(session.id)} className="rounded-xl border border-[#EAE3D9] bg-[#FFFCF7] p-4 text-left transition hover:border-[#FF913D] hover:bg-[#FFF7EE]"><span className="flex items-center justify-between gap-2"><strong className="text-sm text-[#3E2723]">{session.name}</strong><span className="rounded-full bg-[#F2F9E5] px-2 py-1 text-[10px] font-extrabold text-[#4A671E]">{session.status === 'active' ? 'Aktif' : session.status}</span></span><span className="mt-2 block text-xs text-[#6D5A50]">{count} kelompok · {session.participantCount || 0} sudah mengakses</span><span className="mt-3 block text-xs font-extrabold text-[#95634F]">Lihat rincian →</span></button>;
+            })}</div>}
+          </section> : <>
+          <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#EAE3D9] bg-white p-5 shadow-xs sm:p-6">
+            <div><button type="button" onClick={() => setSelectedExamSessionId('')} className="mb-2 text-xs font-bold text-[#95634F] hover:underline">← Kembali ke daftar sesi</button><h2 className="text-xl font-black text-[#3E2723]">{selectedExamSession.name}</h2><p className="mt-1 font-mono text-[10px] text-[#8C7A70]">ID sesi: {selectedExamSession.id}</p><p className="mt-2 text-xs text-[#6D5A50]">{sessionGroupTokens.length} kelompok · {sessionGroupTokens.filter(token => token.status === 'claimed').length} sudah mengakses</p></div>
+            <div className="flex items-center gap-2"><span className="rounded-full bg-[#F2F9E5] px-3 py-1.5 text-xs font-extrabold text-[#4A671E]">{selectedExamSession.status === 'active' ? 'Aktif' : selectedExamSession.status}</span><button type="button" disabled={deletingExamSessionId === selectedExamSession.id} onClick={() => void handleDeleteExamSession(selectedExamSession)} className="rounded-lg border border-red-200 px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-50 disabled:opacity-50">{deletingExamSessionId === selectedExamSession.id ? 'Menghapus…' : 'Hapus Sesi'}</button></div>
+          </section>
+          {examSessionNotice && <p role="status" className="rounded-lg bg-[#F4F9E9] px-3 py-2 text-sm font-semibold text-[#42631D]">{examSessionNotice}</p>}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-white border border-[#EAE3D9] p-5 rounded-2xl space-y-1 shadow-xs">
               <span className="text-xs font-semibold text-[#8C7A70]">Total Kelompok Terdaftar</span>
               <div className="text-3xl font-extrabold text-[#3E2723] font-mono">
-                {groupedSubmissions.length}
+                {sessionGroupTokens.length}
               </div>
             </div>
 
@@ -620,7 +698,7 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
               <span className="text-xs font-semibold text-[#8C7A70]">Menunggu Pemeriksaan</span>
               <div className="text-3xl font-extrabold text-[#FF913D] font-mono">
                 {
-                  allSubmissions.filter(
+                  sessionSubmissions.filter(
                     (s) =>
                       s.status === 'submitted_pending_review' ||
                       s.status === 'reviewed'
@@ -632,16 +710,16 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
             <div className="bg-white border border-[#EAE3D9] p-5 rounded-2xl space-y-1 shadow-xs">
               <span className="text-xs font-semibold text-[#8C7A70]">Hasil Terpublikasi</span>
               <div className="text-3xl font-extrabold text-[#4A671E] font-mono">
-                {allSubmissions.filter((s) => s.status === 'results_published').length}
+                {sessionSubmissions.filter((s) => s.status === 'results_published').length}
               </div>
             </div>
 
             <div className="bg-white border border-[#EAE3D9] p-5 rounded-2xl space-y-1 shadow-xs">
               <span className="text-xs font-semibold text-[#8C7A70]">Pintu Murid Aktif</span>
               <div className="text-sm font-bold text-[#3E2723] pt-1">
-                P: {allSubmissions.filter((s) => s.track === 'penjelajah').length} · B:{' '}
-                {allSubmissions.filter((s) => s.track === 'pengembang').length} · I:{' '}
-                {allSubmissions.filter((s) => s.track === 'inovator').length}
+                P: {sessionSubmissions.filter((s) => s.track === 'penjelajah').length} · B:{' '}
+                {sessionSubmissions.filter((s) => s.track === 'pengembang').length} · I:{' '}
+                {sessionSubmissions.filter((s) => s.track === 'inovator').length}
               </div>
             </div>
           </div>
@@ -659,11 +737,12 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
               </div>
 
               <button
-                onClick={() => createNewSubmission()}
+                onClick={() => setActiveTab('akses_kelas')}
+                disabled={!selectedExamSessionId}
                 className="flex items-center gap-1.5 px-3.5 py-2 bg-[#FF913D] hover:bg-[#F2822B] text-white text-xs font-bold rounded-xl transition-colors cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>Buat Sesi Kelompok Baru</span>
+                <span>Kelola Kelompok Sesi</span>
               </button>
             </div>
 
@@ -680,22 +759,22 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#EAE3D9]">
-                  {groupedSubmissions.map((group) => {
+                  {sessionGroups.map(({ token, submissions: group }) => {
                     const representative = group[0];
                     return (
                       <tr
-                        key={representative.groupCode || representative.groupId || representative.id}
+                        key={token.id}
                         className="hover:bg-[#FAF8F5] transition-colors"
                       >
                         <td className="py-3 px-3">
                           <span className="font-bold text-[#3E2723]">
-                            {representative.team.teamName || '(Belum diberi nama)'}
+                            {representative?.team.teamName || token.teamName || '(Belum diberi nama)'}
                           </span>
                           <span className="text-[10px] text-[#8C7A70] block">
-                            {representative.team.schoolName || 'SD/MI'}
+                            {representative?.team.schoolName || 'SD/MI'}
                           </span>
                           <span className="mt-1 block font-mono text-[10px] text-[#8C7A70]">
-                            ID {representative.groupCode || representative.groupId || '—'}
+                            ID {token.code}
                           </span>
                         </td>
                         <td className="min-w-44 py-3 px-3">
@@ -746,10 +825,12 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
                       </tr>
                     );
                   })}
+                  {sessionGroups.length === 0 && <tr><td colSpan={6} className="py-8 text-center text-sm text-[#8C7A70]">Pilih sesi ujian untuk melihat progres kelompoknya.</td></tr>}
                 </tbody>
               </table>
             </div>
           </div>
+          </>}
         </div>
       )}
 
@@ -1179,11 +1260,12 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
                 Daftar Seluruh Kelompok Belajar
               </h3>
               <button
-                onClick={() => createNewSubmission()}
+                onClick={() => runGroupAction('create-submission', () => createNewSubmission())}
+                disabled={groupAction === 'create-submission'}
                 className="flex items-center gap-1 px-3 py-1.5 bg-[#FF913D] text-white text-xs font-bold rounded-lg"
               >
-                <Plus className="w-3 h-3" />
-                <span>Tambah Kelompok</span>
+                {groupAction === 'create-submission' ? <LoaderCircle className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+                <span>{groupAction === 'create-submission' ? 'Membuat...' : 'Tambah Kelompok'}</span>
               </button>
             </div>
 
@@ -1269,14 +1351,14 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
                           `Hapus data kelompok ${teamName}? Identitas, jawaban, progres, dan timer aktif akan dihapus.${linkedTokenNotice}${lastGroupNotice}${workingNotice}`
                         );
                         if (confirmed) {
-                          setGroupDeleteNotice(deleteSubmissionResponse(sub.id, true));
+                          runGroupAction(`delete-${sub.id}`, () => setGroupDeleteNotice(deleteSubmissionResponse(sub.id, true)));
                         }
                       }}
                       className="text-red-600 hover:text-red-800 cursor-pointer"
                       title="Hapus data kelompok"
                       aria-label={`Hapus data kelompok ${sub.team.teamName || 'baru'}`}
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      {groupAction === `delete-${sub.id}` ? <LoaderCircle className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                     </button>
                   </div>
                 </div>

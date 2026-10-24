@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   ArrowLeft,
+  ArrowRight,
+  Pencil,
   Save,
   Send,
   CheckCircle2,
@@ -12,13 +14,18 @@ import {
 import { ReflectionIllustration } from '../illustrations/Illustrations';
 import { useAssessment } from '../../context/AssessmentContext';
 import { soundManager } from '../../utils/sound';
+import { LoadingIndicator } from '../LoadingIndicator';
 import { ReflectionData } from '../../types';
+import { queueMissionCelebrationAfterSubmit } from '../../utils/missionCelebration';
 
 interface Props {
   onNavigate: (view: string) => void;
+  previewOpen: boolean;
+  onPreviewOpen: (open: boolean) => void;
+  onEditMission: (missionNumber: number) => void;
 }
 
-export const ReflectionView: React.FC<Props> = ({ onNavigate }) => {
+export const ReflectionView: React.FC<Props> = ({ onNavigate, previewOpen, onPreviewOpen, onEditMission }) => {
   const {
     activeSubmission,
     questions,
@@ -43,6 +50,7 @@ export const ReflectionView: React.FC<Props> = ({ onNavigate }) => {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [submitModalOpen, setSubmitModalOpen] = useState(false);
   const [submitFeedback, setSubmitFeedback] = useState<{ success: boolean; message: string } | null>(null);
+  const [submitLoading, setSubmitLoading] = useState(false);
 
   const isAlreadySubmitted =
     activeSubmission.status === 'submitted_pending_review' ||
@@ -102,16 +110,27 @@ export const ReflectionView: React.FC<Props> = ({ onNavigate }) => {
     setTimeout(() => setSaveSuccess(false), 3000);
   };
 
-  const handleFinalSubmit = () => {
-    if (!allCasesCompleted || !reflectionComplete) return;
+  const handleFinalSubmit = async () => {
+    if (!allCasesCompleted || !reflectionComplete || submitLoading) return;
     soundManager.playNextStep();
-    updateReflection({ ...reflectionData, completed: true });
-    const result = submitAssessment();
+    setSubmitLoading(true);
+    setSubmitFeedback(null);
+    const finalReflection = { ...reflectionData, completed: true };
+    updateReflection(finalReflection);
+    const result = await submitAssessment(finalReflection);
     setSubmitFeedback(result);
+    setSubmitLoading(false);
     if (result.success) {
+      if (!isAlreadySubmitted) {
+        const lastMission = currentQuestions.slice().sort((a, b) => a.missionNumber - b.missionNumber).at(-1);
+        if (lastMission) {
+          queueMissionCelebrationAfterSubmit(activeSubmission.id, lastMission.id, currentQuestions.length, true);
+        }
+      }
       setTimeout(() => {
         setSubmitModalOpen(false);
-        onNavigate('evaluasi');
+        onPreviewOpen(false);
+        onNavigate(isAlreadySubmitted ? 'evaluasi' : 'misi');
       }, 1500);
     }
   };
@@ -147,6 +166,68 @@ export const ReflectionView: React.FC<Props> = ({ onNavigate }) => {
       placeholder: 'Jelaskan bagaimana kalian saling bertanya, memeriksa ulang di kalender, atau memanfaatkan petunjuk didaktis...',
     },
   ];
+
+  const renderSubmitConfirmation = () => submitModalOpen && (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
+      <div className="w-full max-w-md space-y-5 rounded-2xl border border-[#EAE3D9] bg-white p-6 shadow-2xl">
+        <div className="space-y-2">
+          <h3 className="text-lg font-bold text-[#3E2723]">{isAlreadySubmitted ? 'Kirim Pembaruan ke Guru?' : 'Kirim Seluruh Asesmen ke Guru?'}</h3>
+          <p className="text-sm leading-relaxed text-[#5D4E46]">Pastikan kelompok <strong>{activeSubmission.team?.teamName || 'Tim'}</strong> sudah memeriksa jawaban empat kasus dan melengkapi refleksi. Nilai dihitung dari jawaban kasus; refleksi menjadi catatan belajar.</p>
+        </div>
+        {submitFeedback && <div role="status" className={`flex items-center gap-2 rounded-xl p-3 text-sm font-medium ${submitFeedback.success ? 'border border-[#A8D468] bg-[#C5E68A]/30 text-[#2D231E]' : 'border border-red-200 bg-red-50 text-red-700'}`}>
+          {submitFeedback.success ? <CheckCircle2 className="h-4 w-4 shrink-0 text-[#4A671E]" /> : <AlertCircle className="h-4 w-4 shrink-0 text-red-500" />}
+          <span>{submitFeedback.message}</span>
+        </div>}
+        <div className="flex flex-wrap justify-end gap-3 pt-2">
+          <button type="button" onClick={() => { soundManager.playClick(); setSubmitModalOpen(false); }} className="min-h-11 rounded-xl border border-[#EAE3D9] bg-[#FAF8F5] px-4 py-2 text-sm font-bold text-[#3E2723]">Periksa Lagi</button>
+          <button type="button" onClick={handleFinalSubmit} disabled={!allCasesCompleted || !reflectionComplete || submitLoading} className="min-h-11 rounded-xl bg-[#FF913D] px-5 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60">{submitLoading ? 'Mengirim…' : 'Kirim jawaban'}</button>
+        </div>
+      </div>
+    </div>
+  );
+
+  if (previewOpen) {
+    return (
+      <div className="answer-preview-page">
+        <header className="answer-preview-header">
+          <button type="button" onClick={() => { soundManager.playClick(); onPreviewOpen(false); }} className="answer-preview-back"><ArrowLeft size={18} /> Kembali ke refleksi</button>
+          <div><span>RUANG MISI KPK · TINJAUAN AKHIR</span><h1>Pratinjau Jawaban</h1><p>Periksa jawaban kelompokmu sebelum dikirim kepada guru.</p></div>
+          <img src="/assets/elephant.png" alt="Tiko menemani kelompok memeriksa jawaban" />
+        </header>
+        <main className="answer-preview-list" aria-label="Jawaban siswa sebelum dikirim">
+          {currentQuestions.slice().sort((a, b) => a.missionNumber - b.missionNumber).map((question, index) => {
+            const answers = activeSubmission.answers[question.id];
+            const steps = [
+              { key: 'step1' as const, title: question.step1Title, fields: question.step1Fields },
+              { key: 'step2' as const, title: question.step2Title, fields: question.step2Fields },
+              { key: 'step3' as const, title: question.step3Title, fields: question.step3Fields },
+              { key: 'step4' as const, title: question.step4Title, fields: question.step4Fields },
+            ];
+            return <article key={question.id} className="answer-preview-mission">
+              <div className="answer-preview-mission-heading"><div><span>MISI {question.missionNumber || index + 1}</span><h2>{question.title}</h2></div><button type="button" onClick={() => { soundManager.playClick(); onEditMission(question.missionNumber); }}><Pencil size={16} />Ubah jawaban</button></div>
+              {steps.map((step) => <section className="answer-preview-step" key={step.key}>
+                <h3>{step.title}</h3>
+                <div className="answer-preview-fields">{step.fields.map((field) => {
+                  const value = answers?.[step.key]?.[field.id]?.trim() || '';
+                  return <div className={`answer-preview-field${value ? '' : ' is-unanswered'}`} key={field.id}>
+                    <strong>{field.label}</strong>
+                    <p>{value || 'Belum dijawab'}</p>
+                    {!value && <span>Jawaban belum diisi</span>}
+                  </div>;
+                })}</div>
+              </section>)}
+            </article>;
+          })}
+        </main>
+        <footer className="answer-preview-actions">
+          <p>{!allCasesCompleted ? 'Selesaikan empat misi terlebih dahulu.' : !reflectionComplete ? 'Lengkapi refleksi sebelum mengirim jawaban.' : 'Jawaban yang masih kosong ditandai agar mudah ditemukan.'}</p>
+          <div><button type="button" onClick={() => { soundManager.playClick(); onPreviewOpen(false); }} className="answer-preview-secondary">Kembali ke refleksi</button><button type="button" disabled={!allCasesCompleted || !reflectionComplete || isAlreadySubmitted} onClick={() => { soundManager.playClick(); setSubmitFeedback(null); setSubmitModalOpen(true); }} className="answer-preview-submit">Kirim jawaban <ArrowRight size={18} /></button></div>
+        </footer>
+        {renderSubmitConfirmation()}
+        {submitLoading && <LoadingIndicator label="Mengirim jawaban..." overlay />}
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-8">
@@ -278,71 +359,21 @@ export const ReflectionView: React.FC<Props> = ({ onNavigate }) => {
             type="button"
             onClick={() => {
               soundManager.playClick();
-              setSubmitModalOpen(true);
+              setSubmitFeedback(null);
+              onPreviewOpen(true);
             }}
             className="flex items-center gap-2 px-6 py-2.5 bg-[#FF913D] hover:bg-[#F2822B] disabled:bg-[#D8CFC8] disabled:text-[#8C7A70] disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
-            disabled={isAlreadySubmitted || !allCasesCompleted || !reflectionComplete}
-            title={!allCasesCompleted ? 'Selesaikan empat kasus terlebih dahulu.' : !reflectionComplete ? 'Isi keempat pertanyaan refleksi terlebih dahulu.' : undefined}
+            disabled={isAlreadySubmitted || !allCasesCompleted}
+            title={!allCasesCompleted ? 'Selesaikan empat kasus terlebih dahulu.' : undefined}
           >
-            <Send className="w-4 h-4" />
-            <span>{isAlreadySubmitted ? 'Berkas Sudah Dikirim' : 'Kirim Asesmen ke Guru'}</span>
+            <ArrowRight className="w-4 h-4" />
+            <span>{isAlreadySubmitted ? 'Berkas Sudah Dikirim' : 'Pratinjau Jawaban'}</span>
           </button>
         </div>
       </div>
 
-      {/* Confirmation Modal */}
-      {submitModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl border border-[#EAE3D9] animate-in zoom-in-95">
-            <div className="space-y-2">
-              <h3 className="text-lg font-bold text-[#3E2723]">
-                {isAlreadySubmitted ? 'Kirim Pembaruan ke Guru?' : 'Kirim Seluruh Asesmen ke Guru?'}
-              </h3>
-              <p className="text-xs text-[#5D4E46] leading-relaxed">
-                Pastikan kelompok <strong>{activeSubmission.team?.teamName || 'Tim'}</strong> telah menyelesaikan empat kasus dan menjawab seluruh pertanyaan refleksi. Nilai hanya dihitung dari jawaban empat kasus. Refleksi menjadi catatan belajar dan tidak memengaruhi nilai.
-              </p>
-            </div>
-
-            {submitFeedback && (
-              <div
-                className={`p-3 rounded-xl text-xs font-medium flex items-center gap-2 ${
-                  submitFeedback.success
-                    ? 'bg-[#C5E68A]/30 border border-[#A8D468] text-[#2D231E]'
-                    : 'bg-red-50 border border-red-200 text-red-700'
-                }`}
-              >
-                {submitFeedback.success ? (
-                  <CheckCircle2 className="w-4 h-4 shrink-0 text-[#4A671E]" />
-                ) : (
-                  <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
-                )}
-                <span>{submitFeedback.message}</span>
-              </div>
-            )}
-
-            <div className="flex items-center justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => {
-                  soundManager.playClick();
-                  setSubmitModalOpen(false);
-                }}
-                className="px-4 py-2 bg-[#FAF8F5] hover:bg-neutral-100 text-[#3E2723] text-xs font-bold rounded-xl border border-[#EAE3D9] cursor-pointer"
-              >
-                Periksa Lagi
-              </button>
-              <button
-                type="button"
-                onClick={handleFinalSubmit}
-                disabled={!allCasesCompleted || !reflectionComplete}
-                className="px-5 py-2 bg-[#FF913D] hover:bg-[#F2822B] text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer"
-              >
-                Ya, Kirim Sekarang
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {renderSubmitConfirmation()}
+      {submitLoading && <LoadingIndicator label="Mengirim jawaban..." overlay />}
     </div>
   );
 };

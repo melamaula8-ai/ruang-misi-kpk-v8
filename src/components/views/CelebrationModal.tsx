@@ -1,10 +1,14 @@
 import React, { useEffect } from 'react';
-import { Award, ArrowRight, Heart, Users, Sparkles } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { ArrowRight } from 'lucide-react';
 import { soundManager } from '../../utils/sound';
+import GajahMisiBerhasil from '../GajahMisiBerhasil';
 
 interface Props {
   isOpen: boolean;
   teamName: string;
+  missionId: string;
+  onMissionAnimationComplete: (missionId: string) => void;
   onProceedToPresentation: () => void;
   onClose: () => void;
 }
@@ -12,79 +16,70 @@ interface Props {
 export const CelebrationModal: React.FC<Props> = ({
   isOpen,
   teamName,
+  missionId,
+  onMissionAnimationComplete,
   onProceedToPresentation,
   onClose,
 }) => {
   useEffect(() => {
-    if (isOpen) {
-      soundManager.playSuccessFanfare();
-    }
+    if (!isOpen) return;
+
+    soundManager.playSuccessFanfare();
+    const body = document.body;
+    const scrollY = window.scrollY;
+    const previousStyles = {
+      position: body.style.position,
+      top: body.style.top,
+      left: body.style.left,
+      right: body.style.right,
+      width: body.style.width,
+      overflow: body.style.overflow,
+    };
+    body.style.position = 'fixed';
+    body.style.top = `-${scrollY}px`;
+    body.style.left = '0';
+    body.style.right = '0';
+    body.style.width = '100%';
+    document.body.style.overflow = 'hidden';
+    return () => {
+      body.style.position = previousStyles.position;
+      body.style.top = previousStyles.top;
+      body.style.left = previousStyles.left;
+      body.style.right = previousStyles.right;
+      body.style.width = previousStyles.width;
+      body.style.overflow = previousStyles.overflow;
+      window.scrollTo(0, scrollY);
+    };
   }, [isOpen]);
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 space-y-6 shadow-2xl border-2 border-[#C5E68A] relative animate-in fade-in zoom-in-95 duration-300 text-center">
-        {/* Celebration Trophy / Ribbon Badge */}
-        <div className="relative mx-auto w-20 h-20 bg-[#FFE082]/30 rounded-full flex items-center justify-center border-4 border-[#FFE082] shadow-md">
-          <Award className="w-10 h-10 text-[#FF913D]" />
-          <div className="absolute -top-1 -right-1 bg-[#C5E68A] text-[#2D231E] rounded-full p-1.5 shadow-xs">
-            <Sparkles className="w-4 h-4 text-[#2D231E]" />
-          </div>
+  return createPortal(
+    <div className="final-celebration" role="presentation">
+      <section className="final-celebration-stage" role="dialog" aria-modal="true" aria-labelledby="final-celebration-title">
+        <div className="final-celebration-route" aria-hidden="true">
+          <span>1</span><i /><span>2</span><i /><span>3</span><i /><span>4</span>
         </div>
 
-        <div className="space-y-2">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#C5E68A]/40 text-[#3E521B] font-extrabold text-xs">
-            <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500" />
-            <span>Apresiasi Keberhasilan Penyelidikan!</span>
-          </span>
+        <p className="final-celebration-eyebrow">GARIS AKHIR PETUALANGAN</p>
+        <h2 id="final-celebration-title" className="final-celebration-title">
+          Hebat, {teamName || 'Tim Hebat'}!
+        </h2>
+        <p className="final-celebration-copy">Semua misi berhasil kalian selesaikan. Pola KPK kini sudah kalian taklukkan bersama.</p>
 
-          <h2 className="text-2xl font-extrabold text-[#3E2723]">
-            Luar Biasa, {teamName || 'Tim Hebat'}!
-          </h2>
-
-          <p className="text-sm font-semibold text-[#95634F]">
-            Kalian telah berhasil menyelesaikan seluruh 4 Kasus Investigasi KPK!
-          </p>
+        <div className="final-celebration-mascot">
+          <GajahMisiBerhasil key={missionId} size={245} onComplete={() => onMissionAnimationComplete(missionId)} />
         </div>
 
-        {/* Constructive feedback statement */}
-        <div className="bg-[#FAF8F5] border border-[#EAE3D9] rounded-2xl p-4 text-xs text-[#5D4E46] leading-relaxed text-left space-y-2">
-          <div className="flex items-center gap-1.5 font-bold text-[#3E2723]">
-            <Users className="w-4 h-4 text-[#95634F]" />
-            <span>Catatan Apresiasi untuk Seluruh Anggota:</span>
-          </div>
-          <p>
-            Kalian telah membuktikan bahwa matematika adalah tentang menemukan pola dan bekerja sama. Melalui 4 tahap Polya, kelompokmu tekun memahami masalah, merencanakan strategi kelipatan, dan teliti memeriksa hasil penambahan kalender dan detik.
-          </p>
-          <p className="font-semibold text-[#4A671E]">
-            Kerja keras, diskusi yang hidup, dan ketelitian kalian hari ini sungguh patut dibanggakan! Sekarang, saatnya membagikan temuan hebat ini kepada teman-teman sekelas.
-          </p>
-        </div>
-
-        {/* Primary CTA */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-full sm:w-auto px-4 py-2.5 bg-[#FAF8F5] hover:bg-neutral-100 text-[#6D5A50] text-xs font-bold rounded-xl transition-colors cursor-pointer"
-          >
-            Lihat Dasbor Kasus
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              soundManager.playNextStep();
-              onProceedToPresentation();
-            }}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-[#FF913D] hover:bg-[#F2822B] text-white text-xs font-bold rounded-xl shadow-md transition-all cursor-pointer"
-          >
-            <span>Lihat Hasil Kelompok</span>
-            <ArrowRight className="w-4 h-4" />
+        <p className="final-celebration-message">Diskusi, ketelitian, dan kerja sama kalian membawa tim sampai ke tujuan.</p>
+        <div className="final-celebration-actions">
+          <button type="button" onClick={onClose} className="final-celebration-secondary">Kembali ke peta misi</button>
+          <button type="button" onClick={() => { soundManager.playNextStep(); onProceedToPresentation(); }} className="final-celebration-primary">
+            Lanjut ke refleksi <ArrowRight size={18} />
           </button>
         </div>
-      </div>
-    </div>
+      </section>
+    </div>,
+    document.body,
   );
 };

@@ -26,6 +26,7 @@ export function createFakeD1(): D1Like & { raw: DatabaseSync } {
   raw.exec(readFileSync(new URL('../migrations/0001_init.sql', import.meta.url), 'utf8'));
   raw.exec(readFileSync(new URL('../migrations/0002_classes.sql', import.meta.url), 'utf8'));
   raw.exec(readFileSync(new URL('../migrations/0003_teacher_accounts_ownership.sql', import.meta.url), 'utf8'));
+  raw.exec(readFileSync(new URL('../migrations/0004_exam_sessions.sql', import.meta.url), 'utf8'));
   return {
     raw,
     prepare: (sql) => new Stmt(raw, sql),

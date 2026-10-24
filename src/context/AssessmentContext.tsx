@@ -33,10 +33,11 @@ interface AssessmentContextType {
   groupTokens: GroupToken[];
   activeGroupToken: GroupToken | null;
   hasVerifiedGroupToken: boolean;
-  createGroupTokens: (quantity: number, customPrefix?: string) => Promise<GroupToken[]>;
+  createGroupTokens: (sessionId: string, quantity: number, customPrefix?: string) => Promise<GroupToken[]>;
   createStudentGroupToken: () => Promise<{ success: boolean; message: string; code?: string }>;
   toggleGroupTokenStatus: (id: string, newStatus: GroupTokenStatus) => void;
   deleteGroupToken: (id: string) => { success: boolean; message: string };
+  removeExamSessionData: (sessionId: string) => void;
   replaceGroupToken: (id: string) => GroupToken;
   verifyAndClaimGroupToken: (code: string) => Promise<{ success: boolean; message: string; isResume?: boolean }>; 
   logoutGroupToken: () => void;
@@ -55,7 +56,7 @@ interface AssessmentContextType {
   ) => void;
   updatePresentation: (data: Partial<PresentationData>) => void;
   updateReflection: (data: Partial<ReflectionData>) => void;
-  submitAssessment: () => { success: boolean; message: string };
+  submitAssessment: (reflection?: ReflectionData) => Promise<{ success: boolean; message: string }>;
 
   // 25-Minute Countdown Timer (Section B)
   timerSeconds: number;
@@ -818,12 +819,12 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   // Teacher-issued IDs are created by the server so each is saved under the
   // authenticated account and tied to its class before being shared.
-  const createGroupTokens = async (quantity: number, customPrefix: string = 'KPK'): Promise<GroupToken[]> => {
+  const createGroupTokens = async (sessionId: string, quantity: number, customPrefix: string = 'KPK'): Promise<GroupToken[]> => {
     const response = await fetch('/api/group-token', {
       method: 'POST',
       headers: cloudHeaders(true),
       cache: 'no-store',
-      body: JSON.stringify({ quantity, prefix: customPrefix, className: `Kelas ${new Date().toLocaleDateString('id-ID')}` }),
+      body: JSON.stringify({ sessionId, quantity, prefix: customPrefix }),
     });
     const result: { error?: string; tokens?: GroupToken[] } = await response.json().catch(() => ({}));
     if (!response.ok || !Array.isArray(result.tokens)) {
@@ -932,6 +933,28 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       success: true,
       message: `ID Kelompok ${token.code} berhasil dihapus.${linkedSubmission ? ' Sesi dan progres kelompok yang terhubung juga dihapus.' : ''}`,
     };
+  };
+
+  const removeExamSessionData = (sessionId: string) => {
+    const tokens = groupTokens.filter((token) => token.classId === sessionId);
+    const tokenIds = new Set(tokens.map((token) => token.id));
+    const tokenCodes = new Set(tokens.map((token) => token.code.toUpperCase()));
+    const isSessionSubmission = (submission: AssessmentSubmission) =>
+      submission.classId === sessionId ||
+      Boolean(submission.groupId && tokenIds.has(submission.groupId)) ||
+      Boolean(submission.groupCode && tokenCodes.has(submission.groupCode.toUpperCase()));
+    const removesActiveSubmission = allSubmissions.some((submission) =>
+      submission.id === activeSubmissionId && isSessionSubmission(submission)
+    );
+    const remainingSubmissions = allSubmissions.filter((submission) => !isSessionSubmission(submission));
+    const nextSubmissions = remainingSubmissions.length > 0 ? remainingSubmissions : [createFreshSubmission()];
+
+    setGroupTokens((previous) => previous.filter((token) => token.classId !== sessionId));
+    setAllSubmissions(nextSubmissions);
+    if (removesActiveSubmission) {
+      setActiveSubmissionId(nextSubmissions[0].id);
+      setActiveTokenCode(nextSubmissions[0].groupCode || '');
+    }
   };
 
   const replaceGroupToken = (id: string): GroupToken => {
@@ -1397,7 +1420,9 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     );
   };
 
-  const submitAssessment = () => {
+  const submissionInFlight = useRef(false);
+  const submitAssessment = async (reflection?: ReflectionData) => {
+    if (submissionInFlight.current) return { success: false, message: 'Pengiriman jawaban sedang berlangsung.' };
     if (activeSubmission.status === 'submitted_pending_review' || activeSubmission.status === 'reviewed' || activeSubmission.status === 'results_published') {
       return { success: false, message: 'Asesmen kelompok ini sudah dikirim ke guru.' };
     }
@@ -1429,34 +1454,40 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       return { success: false, message: 'Lengkapi empat pertanyaan refleksi sebelum mengirim asesmen.' };
     }
 
+    if (!cloudReady || cloudStatus !== 'online') {
+      return { success: false, message: 'Database belum terhubung. Periksa koneksi lalu coba kembali.' };
+    }
+
     const now = new Date().toISOString();
     const targetId = effectiveActiveId;
-    setAllSubmissions((prev) =>
-      prev.map((sub) => {
-        if (sub.id !== targetId) return sub;
-        return {
-          ...sub,
-          status: 'submitted_pending_review',
-          isTimerRunning: false,
-          submittedAt: now,
-          history: [
-            ...sub.history,
-            {
-              timestamp: now,
-              action: 'Asesmen dikirim oleh kelompok untuk pemeriksaan guru',
-              actor: sub.team.teamName || 'Kelompok Murid',
-            },
-          ],
-        };
-      })
-    );
-
-    setIsTimerActive(false);
-
-    return {
-      success: true,
-      message: 'Asesmen berhasil dikirim! Menunggu pemeriksaan dan publikasi hasil oleh guru.',
+    const submitted = {
+      ...activeSubmission,
+      reflection: reflection ? { ...activeSubmission.reflection, ...reflection } : activeSubmission.reflection,
+      status: 'submitted_pending_review' as const,
+      isTimerRunning: false,
+      submittedAt: now,
+      history: [
+        ...activeSubmission.history,
+        { timestamp: now, action: 'Asesmen dikirim oleh kelompok untuk pemeriksaan guru', actor: activeSubmission.team.teamName || 'Kelompok Murid' },
+      ],
     };
+    submissionInFlight.current = true;
+    try {
+      const response = await fetch('/api/sync', {
+        method: 'POST',
+        headers: cloudHeaders(true),
+        body: JSON.stringify({ upsertSubmissions: [submitted] }),
+      });
+      const result = await response.json().catch(() => ({} as { error?: string }));
+      if (!response.ok) return { success: false, message: result.error || 'Jawaban gagal disimpan. Periksa koneksi lalu coba kembali.' };
+      setAllSubmissions((previous) => previous.map((sub) => sub.id === targetId ? submitted : sub));
+      setIsTimerActive(false);
+      return { success: true, message: 'Jawaban berhasil disubmit!' };
+    } catch {
+      return { success: false, message: 'Jawaban gagal disimpan. Periksa koneksi lalu coba kembali.' };
+    } finally {
+      submissionInFlight.current = false;
+    }
   };
 
   // Submissions management
@@ -1889,6 +1920,7 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         createStudentGroupToken,
         toggleGroupTokenStatus,
         deleteGroupToken,
+        removeExamSessionData,
         replaceGroupToken,
         verifyAndClaimGroupToken,
         logoutGroupToken,

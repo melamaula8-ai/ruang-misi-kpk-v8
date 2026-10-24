@@ -6,6 +6,7 @@
 
 let audioCtx: AudioContext | null = null;
 let isMuted = false;
+let lastButtonClickAt = 0;
 
 function getAudioContext(): AudioContext | null {
   if (typeof window === 'undefined') return null;
@@ -82,6 +83,9 @@ export const soundManager = {
    */
   playClick() {
     if (isMuted) return;
+    // Klik global dijalankan saat capture; cegah handler lama pada tombol yang
+    // sama memutar efek yang identik sekali lagi ketika event naik.
+    if (performance.now() - lastButtonClickAt < 100) return;
     try {
       const ctx = getAudioContext();
       if (!ctx) return;
@@ -99,6 +103,27 @@ export const soundManager = {
       osc.connect(gain);
       gain.connect(ctx.destination);
 
+      osc.start();
+      osc.stop(ctx.currentTime + 0.05);
+    } catch {}
+  },
+
+  playButtonClick() {
+    if (isMuted) return;
+    lastButtonClickAt = performance.now();
+    try {
+      const ctx = getAudioContext();
+      if (!ctx) return;
+
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(480, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(240, ctx.currentTime + 0.05);
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.05);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
       osc.start();
       osc.stop(ctx.currentTime + 0.05);
     } catch {}

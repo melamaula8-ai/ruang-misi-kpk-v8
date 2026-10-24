@@ -1,314 +1,222 @@
-import React, { useState } from 'react';
-import {
-  ArrowRight,
-  CheckCircle2,
-  Clock,
-  PlayCircle,
-  Award,
-  Timer,
-  Lock,
-  AlertCircle,
-} from 'lucide-react';
-import {
-  PiketIllustration,
-  TrafficIllustration,
-  SportsIllustration,
-  AgendaIllustration,
-} from '../illustrations/Illustrations';
-import { CelebrationModal } from './CelebrationModal';
+import React, { useEffect, useState } from 'react';
+import { ArrowLeft, ArrowRight, Award, Check, Clock3, Home, LockKeyhole, Timer } from 'lucide-react';
 import { useAssessment } from '../../context/AssessmentContext';
 import { soundManager } from '../../utils/sound';
+import { consumeMissionCelebration } from '../../utils/missionCelebration';
+import { MissionCelebrationOverlay } from './MissionCelebrationOverlay';
 
 interface Props {
   onNavigate: (view: string) => void;
   onSelectMission: (missionNum: number) => void;
 }
 
-export const MissionsHubView: React.FC<Props> = ({ onNavigate, onSelectMission }) => {
-  const {
-    currentTrack,
-    questions,
-    activeSubmission,
-    timerSeconds,
-    rubricConfig,
-    hasTimeExpired,
-  } = useAssessment();
+const missionIcons = ['/assets/misi1.png', '/assets/misi2.png', '/assets/misi3.png', '/assets/misi4.png'];
+const desktopCarCenters = [206, 573, 855, 1137, 1362];
+const phoneCarCenters = [52, 96, 178, 260, 342];
+const missionNames = ['Jadwal Piket Kelas', 'Lampu Lalu Lintas', 'Jadwal Olahraga', 'Belajar Bersama'];
 
-  const [celebrationOpen, setCelebrationOpen] = useState(false);
-  const [hasCelebrated, setHasCelebrated] = useState(false);
+export const MissionsHubView: React.FC<Props> = ({ onNavigate, onSelectMission }) => {
+  const { currentTrack, questions, activeSubmission, timerSeconds, rubricConfig, hasTimeExpired } = useAssessment();
+  const [arrivalMarker] = useState(() => consumeMissionCelebration(activeSubmission.id));
+  const [animationStage, setAnimationStage] = useState<'celebrating' | 'pause' | 'travel' | 'arrived'>(
+    arrivalMarker ? 'celebrating' : 'arrived',
+  );
+  const [showStars, setShowStars] = useState(false);
 
   const currentQuestions = questions
     .filter((question) => question.track === currentTrack)
     .slice()
     .sort((a, b) => a.missionNumber - b.missionNumber);
-  const illustrations = { piket: PiketIllustration, lampu: TrafficIllustration, olahraga: SportsIllustration, agenda: AgendaIllustration };
-  const missionsMeta = currentQuestions.map((question) => ({
-    num: question.missionNumber,
-    id: question.id,
-    title: question.title,
-    subtitle: question.story,
-    question,
-    Illustration: illustrations[question.context],
-  }));
 
-  // Completion is calculated against each question's actual field IDs.
-  const getMissionStatus = (question: (typeof currentQuestions)[number]) => {
+  const statuses = currentQuestions.map((question) => {
     const answers = activeSubmission.answers[question.id];
     const steps = [
       ['step1', question.step1Fields], ['step2', question.step2Fields],
       ['step3', question.step3Fields], ['step4', question.step4Fields],
     ] as const;
     const totalFields = steps.reduce((count, [, fields]) => count + fields.length, 0);
-    const filledCount = steps.reduce((count, [step, fields]) => count + fields.filter((field) => Boolean(answers?.[step]?.[field.id]?.trim())).length, 0);
-    const isComplete = totalFields > 0 && (
-      filledCount >= Math.max(3, totalFields * 0.7) ||
-      (Boolean(answers?.step3 && Object.values(answers.step3).some((value) => value.trim())) &&
-        Boolean(answers?.step4 && Object.values(answers.step4).some((value) => value.trim())))
-    );
-    if (activeSubmission.status === 'results_published') return { label: 'Selesai diperiksa', status: 'reviewed', count: filledCount, total: totalFields, isComplete: true };
-    if (activeSubmission.status === 'submitted_pending_review' || activeSubmission.status === 'time_expired_pending_review') return { label: 'Tersimpan & Dikirim', status: 'pending_review', count: filledCount, total: totalFields, isComplete: true };
-    if (isComplete) return { label: 'Kasus Selesai', status: 'complete', count: filledCount, total: totalFields, isComplete: true };
-    if (filledCount > 0) return { label: 'Sedang dikerjakan', status: 'in_progress', count: filledCount, total: totalFields, isComplete: false };
-    return { label: 'Belum dimulai', status: 'not_started', count: 0, total: totalFields, isComplete: false };
-  };
+    const filledCount = steps.reduce((count, [step, fields]) =>
+      count + fields.filter((field) => Boolean(answers?.[step]?.[field.id]?.trim())).length, 0);
+    const isComplete = activeSubmission.status === 'results_published' ||
+      activeSubmission.status === 'submitted_pending_review' ||
+      activeSubmission.status === 'time_expired_pending_review' ||
+      (totalFields > 0 && (
+        filledCount >= Math.max(3, totalFields * 0.7) ||
+        (Boolean(answers?.step3 && Object.values(answers.step3).some((value) => value.trim())) &&
+          Boolean(answers?.step4 && Object.values(answers.step4).some((value) => value.trim())))
+      ));
+    return { isComplete, filledCount, totalFields };
+  });
 
-  const statuses = currentQuestions.map(getMissionStatus);
-  const completeCount = statuses.filter((s) => s.isComplete).length;
-  const allCasesCompleted = statuses.length > 0 && completeCount === statuses.length;
-  const progressPercent = statuses.length ? Math.round((completeCount / statuses.length) * 100) : 0;
-
-  // Trigger celebration modal when all 4 cases are finished for the first time
-  React.useEffect(() => {
-    if (allCasesCompleted && !hasCelebrated) {
-      setCelebrationOpen(true);
-      setHasCelebrated(true);
-    }
-  }, [allCasesCompleted, hasCelebrated]);
-
-  // Format 25-minute timer
+  const allCasesCompleted = statuses.length > 0 && statuses.every((status) => status.isComplete);
+  const contiguousDoneCount = statuses.reduce((count, status, index) =>
+    index === count && status.isComplete ? count + 1 : count, 0);
+  const visualDoneCount = arrivalMarker
+    ? (animationStage === 'travel' || animationStage === 'arrived' ? arrivalMarker.toDone : arrivalMarker.fromDone)
+    : contiguousDoneCount;
+  const progressPercent = currentQuestions.length
+    ? Math.round((visualDoneCount / currentQuestions.length) * 100)
+    : 0;
+  const isSubmitted = ['submitted_pending_review', 'time_expired_pending_review', 'reviewed', 'results_published'].includes(activeSubmission.status);
+  const activeIndex = Math.min(visualDoneCount, Math.max(0, currentQuestions.length - 1));
+  const activeQuestion = currentQuestions[activeIndex];
   const minutes = Math.floor(timerSeconds / 60);
   const seconds = timerSeconds % 60;
   const formattedTime = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-  const isTimeLow = timerSeconds < 300; // less than 5 minutes
+  const carCenters = currentQuestions.length === 4 ? desktopCarCenters : desktopCarCenters.slice(0, currentQuestions.length + 1);
+  const phoneCenters = currentQuestions.length === 4 ? phoneCarCenters : phoneCarCenters.slice(0, currentQuestions.length + 1);
+  const carStep = Math.min(visualDoneCount, carCenters.length - 1);
+  const desktopCarCenter = carCenters[carStep] ?? desktopCarCenters[0];
+  const phoneCarCenter = phoneCenters[carStep] ?? phoneCarCenters[0];
+  const title = isSubmitted && allCasesCompleted && visualDoneCount >= currentQuestions.length
+    ? 'Hore, petualanganmu selesai!'
+    : visualDoneCount === 0 ? 'Empat misi, satu tim hebat!' : 'Ayo lanjutkan petualanganmu!';
+  const subtitle = isSubmitted && allCasesCompleted && visualDoneCount >= currentQuestions.length
+    ? 'Kamu dan Tiko sudah menemukan pola bilangan.'
+    : allCasesCompleted
+      ? 'Semua misi sudah terjawab. Periksa lagi jawabanmu, lalu kirim asesmen ke guru.'
+      : 'Pilih misi aktif dan temukan pola bilangan bersama Tiko!';
 
-  const handleCaseSelect = (num: number) => {
-    soundManager.playClick();
-    onSelectMission(num);
-  };
+  useEffect(() => {
+    if (animationStage !== 'pause') return;
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const timer = window.setTimeout(() => setAnimationStage('travel'), reducedMotion ? 350 : 850);
+    return () => window.clearTimeout(timer);
+  }, [animationStage]);
 
-  const handleProceedToReflection = () => {
-    if (!allCasesCompleted) return;
-    soundManager.playNextStep();
-    onNavigate('refleksi');
-  };
+  useEffect(() => {
+    if (animationStage !== 'travel') return;
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const timer = window.setTimeout(() => {
+      setAnimationStage('arrived');
+      setShowStars(true);
+    }, reducedMotion ? 0 : 1800);
+    return () => window.clearTimeout(timer);
+  }, [animationStage]);
 
-  // Arahkan murid ke status hasil setelah timer otomatis mengirim asesmen.
-  React.useEffect(() => {
-    if (hasTimeExpired) {
-      const timer = setTimeout(() => {
-        onNavigate('evaluasi');
-      }, 3500);
-      return () => clearTimeout(timer);
-    }
+  useEffect(() => {
+    if (!showStars) return;
+    const timer = window.setTimeout(() => setShowStars(false), 1500);
+    return () => window.clearTimeout(timer);
+  }, [showStars]);
+
+  useEffect(() => {
+    if (!hasTimeExpired) return;
+    const timer = window.setTimeout(() => onNavigate('evaluasi'), 3500);
+    return () => window.clearTimeout(timer);
   }, [hasTimeExpired, onNavigate]);
 
+  const selectMission = (missionNumber: number) => {
+    const index = currentQuestions.findIndex((question) => question.missionNumber === missionNumber);
+    if (index < 0 || index > activeIndex) return;
+    soundManager.playClick();
+    onSelectMission(missionNumber);
+  };
+
   return (
-    <div className="adventure-page max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-8">
-      <section className="mission-hub-hero relative overflow-hidden rounded-[2rem] border-2 border-white bg-gradient-to-r from-[#FFF0D2] via-white to-[#E8F5D8] p-5 shadow-lg sm:p-7">
-        <div className="absolute -right-8 -top-8 h-36 w-36 rounded-full bg-[#FFE082]/50 blur-2xl" aria-hidden="true" />
-        <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><span className="inline-flex rounded-full bg-white/90 px-3 py-1.5 text-xs font-black text-[#9A5A18] shadow-sm">PETA PETUALANGANMU</span><h2 className="mt-3 text-2xl font-black text-[#3E2723] sm:text-3xl">Empat misi, satu tim hebat!</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-[#6D5A50]">Pilih kasus, diskusikan strategi, dan isi empat langkah pemecahan masalah. Setiap kemajuan membawamu lebih dekat ke garis akhir.</p></div><div className="flex items-center gap-2" aria-hidden="true"><span className="flex h-11 w-11 items-center justify-center rounded-xl border-2 border-white bg-[#C5E68A] text-lg font-black text-[#42631D] shadow-sm">×</span><span className="flex h-11 w-11 items-center justify-center rounded-xl border-2 border-white bg-[#FFE082] text-lg font-black text-[#704A36] shadow-sm">÷</span><span className="flex h-11 w-11 items-center justify-center rounded-xl border-2 border-white bg-[#FF913D] text-lg font-black text-white shadow-sm">=</span></div></div>
-      </section>
-      {/* Time Expired Notification Banner */}
-      {hasTimeExpired && (
-        <div className="p-4 bg-amber-50 border-2 border-amber-300 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-amber-900 shadow-sm animate-in fade-in">
-          <div className="flex items-center gap-3">
-            <Clock className="w-6 h-6 text-[#FF913D] shrink-0" />
-            <div className="text-xs sm:text-sm">
-              <strong>Waktu pengerjaan {rubricConfig.durationMinutes ?? 25} menit telah habis.</strong> Jawaban tersimpan dan asesmen otomatis dikirim ke guru.
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              soundManager.playClick();
-              onNavigate('evaluasi');
-            }}
-            className="px-4 py-2 bg-[#FF913D] hover:bg-[#F2822B] text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
-          >
-            Lihat Hasil Kelompok &rarr;
-          </button>
+    <div className="mission-map-shell">
+      <header className="mission-map-header">
+        <div className="mission-map-brand">
+          <img src="/app_logo.jpg" alt="" className="mission-map-logo" />
+          <span>Ruang Misi KPK</span>
         </div>
-      )}
+        <button type="button" className="mission-map-home" onClick={() => { soundManager.playClick(); onNavigate('beranda'); }}>
+          <Home size={17} aria-hidden="true" /><span>Halaman Utama</span>
+        </button>
+      </header>
 
-      {/* Header & 25-Minute Countdown Timer Strip */}
-      <div className="bg-white border border-[#EAE3D9] rounded-2xl p-6 sm:p-8 space-y-5 shadow-xs">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-[#95634F]">
-                Dasbor 4 Kasus Investigasi
-              </span>
-              <span className="text-xs text-[#8C7A70]">·</span>
-              <span className="text-xs font-extrabold uppercase px-2 py-0.5 rounded bg-[#C5E68A]/30 text-[#4A671E] border border-[#C5E68A]">
-                Pintu {currentTrack}
-              </span>
+      <main className="mission-map-main" aria-label="Peta misi siswa">
+        <section className="mission-map-hero">
+          <div className="mission-map-hero-art"><img src="/assets/elephant.png" alt="Tiko, gajah biru teman petualangan" /></div>
+          <div className="mission-map-welcome">
+            <h1>{title}</h1>
+            <p>{subtitle}</p>
+          </div>
+          <section className="mission-map-progress" aria-label="Progres misi">
+            <div className="mission-map-progress-title"><Award size={22} aria-hidden="true" /><strong>Progres Misi</strong><span>{visualDoneCount} dari {currentQuestions.length}</span></div>
+            <div className="mission-map-progress-track" role="progressbar" aria-valuemin={0} aria-valuemax={currentQuestions.length} aria-valuenow={visualDoneCount} aria-label={`${visualDoneCount} dari ${currentQuestions.length} misi selesai`}>
+              <span style={{ width: `${progressPercent}%` }} />
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-[#3E2723] tracking-tight">
-              Pilih Kasus yang Ingin Dikerjakan
-            </h1>
-            <p className="text-xs sm:text-sm text-[#6D5A50]">
-              Kelompokmu bebas memilih kasus mana dulu yang ingin diselesaikan. Selesaikan keempat kasus untuk melihat hasil kelompok.
-            </p>
-          </div>
+            <div className="mission-map-clock"><Timer size={15} aria-hidden="true" /><span>{hasTimeExpired ? 'Waktu selesai' : `Timer ${rubricConfig.durationMinutes ?? 25} menit · ${formattedTime}`}</span></div>
+          </section>
+        </section>
 
-          {/* 25-Minute Timer Display */}
-          <div className="flex items-center gap-3 bg-[#FAF8F5] border border-[#EAE3D9] p-3 rounded-2xl shrink-0">
-            <div
-              className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                isTimeLow ? 'bg-red-100 text-red-600' : 'bg-[#FFE082]/40 text-[#6F4736]'
-              }`}
-            >
-              <Timer className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-[#8C7A70] block">
-                Timer Pengerjaan ({rubricConfig.durationMinutes ?? 25} Menit):
-              </span>
-              <div
-                className={`text-2xl font-extrabold font-mono tracking-wider ${
-                  isTimeLow ? 'text-red-600 animate-pulse' : 'text-[#3E2723]'
-                }`}
-              >
-                {formattedTime}
-              </div>
-            </div>
-          </div>
-        </div>
+        {hasTimeExpired && <div className="mission-map-expired" role="status"><Clock3 size={17} /> Waktu pengerjaan habis. Jawaban tersimpan dan asesmen otomatis dikirim ke guru.</div>}
 
-        {/* Progress Bar & Counter */}
-        <div className="space-y-2 pt-2">
-          <div className="flex justify-between items-center text-xs">
-            <span className="font-semibold text-[#6D5A50]">
-              Progres Kasus Selesai:
-            </span>
-            <span className="font-mono font-bold text-[#3E2723]">
-              {completeCount} / {currentQuestions.length} Kasus ({progressPercent}%)
-            </span>
-          </div>
-          <div className="w-full bg-[#FAF8F5] border border-[#EAE3D9] rounded-full h-3 overflow-hidden">
-            <div
-              className="bg-[#C5E68A] h-full transition-all duration-500 rounded-full"
-              style={{ width: `${progressPercent}%` }}
-            />
-          </div>
-        </div>
-      </div>
+        <section className="mission-map-scene" aria-label="Jalur empat misi">
+          <div className="mission-map-sun" aria-hidden="true" />
+          <span className="mission-map-cloud mission-map-cloud-one" aria-hidden="true" />
+          <span className="mission-map-cloud mission-map-cloud-two" aria-hidden="true" />
+          <div className="mission-map-hill mission-map-hill-back" aria-hidden="true" />
+          <div className="mission-map-hill mission-map-hill-mid" aria-hidden="true" />
+          <div className="mission-map-hill mission-map-hill-front" aria-hidden="true" />
+          <div className="mission-map-fence" aria-hidden="true" />
+          <span className="mission-map-start-sign" aria-hidden="true">Mulai</span>
+          <div className="mission-map-road" aria-hidden="true"><span style={{ width: `${currentQuestions.length ? Math.min(100, (visualDoneCount / currentQuestions.length) * 100) : 0}%` }} /></div>
 
-      {/* 4 Mission Cards (Siswa bebas memilih mana dulu yang dikerjakan) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {missionsMeta.map((m) => {
-          const Illustration = m.Illustration;
-          const statusInfo = getMissionStatus(m.question);
-          const missionQuestion = m.question;
-
-          let badgeColor = 'text-[#6D5A50] bg-neutral-100';
-          let StatusIcon = PlayCircle;
-
-          if (statusInfo.isComplete) {
-            badgeColor = 'text-[#2D231E] bg-[#C5E68A] font-bold';
-            StatusIcon = CheckCircle2;
-          } else if (statusInfo.status === 'in_progress') {
-            badgeColor = 'text-[#8C6D1F] bg-[#FFE082] font-semibold';
-            StatusIcon = Clock;
-          }
-
-          return (
-            <div
-              key={m.id}
-              onClick={() => handleCaseSelect(m.num)}
-              className="bg-white border-2 border-[#EAE3D9] hover:border-[#FF913D] rounded-2xl p-6 transition-all shadow-xs hover:shadow-md cursor-pointer flex flex-col justify-between space-y-4 group"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="space-y-1">
-                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] ${badgeColor}`}>
-                    <StatusIcon className="w-3.5 h-3.5" />
-                    <span>{statusInfo.label}</span>
-                  </span>
-                  <h3 className="text-lg font-bold text-[#3E2723] pt-1 group-hover:text-[#FF913D] transition-colors">
-                    {missionQuestion?.title || m.title}
-                  </h3>
-                  <p className="line-clamp-2 text-xs text-[#6D5A50]">{missionQuestion?.story || m.subtitle}</p>
-                </div>
-
-                <div className="w-20 h-20 shrink-0 flex items-center justify-center bg-[#FAF8F5] rounded-xl border border-[#EAE3D9] p-1">
-                  <Illustration className="w-16 h-16" />
-                </div>
-              </div>
-
-              <div className="pt-4 border-t border-[#EAE3D9] flex items-center justify-between text-xs">
-                <span className="text-[#8C7A70] font-medium">
-                  Tahap 1 s.d. 4 Polya
-                </span>
-
+          {currentQuestions.map((question, index) => {
+            const isDone = index < visualDoneCount;
+            const isActive = index === visualDoneCount && index === activeIndex;
+            const isLocked = index > activeIndex;
+            const missionLabel = question.title || missionNames[index] || `Misi ${index + 1}`;
+            return (
+              <div key={question.id} className={`mission-map-stop mission-map-stop-${index + 1}`} style={{ '--desktop-x': `${[30, 49.6, 69.2, 88.8][index] ?? 50}%`, '--phone-x': `${[24.6, 45.6, 66.7, 87.7][index] ?? 50}%` } as React.CSSProperties}>
+                <span className={`mission-map-pin ${isDone ? 'is-done' : isActive ? 'is-active' : 'is-locked'}`} aria-hidden="true">{isDone ? <Check size={24} strokeWidth={3} /> : isLocked ? <LockKeyhole size={19} /> : index + 1}</span>
                 <button
                   type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleCaseSelect(m.num);
-                  }}
-                  className="flex items-center gap-1.5 font-bold text-[#FF913D] group-hover:text-[#F2822B]"
+                  className={`mission-map-bubble ${isDone ? 'is-done' : isActive ? 'is-active' : 'is-locked'}`}
+                  onClick={() => selectMission(question.missionNumber)}
+                  disabled={isLocked}
+                  aria-label={`${isLocked ? 'Terkunci' : isDone ? 'Selesai, tinjau' : 'Misi aktif'}: ${missionLabel}`}
+                  aria-current={isActive ? 'step' : undefined}
+                  title={isLocked ? 'Selesaikan misi sebelumnya terlebih dahulu' : missionLabel}
                 >
-                  <span>{statusInfo.isComplete ? 'Tinjau / Edit Kasus' : 'Kerjakan Kasus Ini'}</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
+                  <img src={missionIcons[index % missionIcons.length]} alt="" />
                 </button>
+                <div className="mission-map-label"><strong>Misi {question.missionNumber}</strong><span>{missionNames[index] || missionLabel}</span></div>
+                {showStars && arrivalMarker?.missionId === question.id && <div className="mission-map-stars" aria-hidden="true"><i>★</i><i>★</i><i>★</i><i>★</i></div>}
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
 
-      {/* Footer navigation to Results (locked until all 4 cases are complete) */}
-      <div className="bg-white border border-[#EAE3D9] rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="space-y-1 text-xs text-[#6D5A50] text-center sm:text-left">
-          <div className="flex items-center gap-1.5 font-bold text-[#3E2723]">
-            {allCasesCompleted ? (
-              <CheckCircle2 className="w-4 h-4 text-[#4A671E]" />
-            ) : (
-              <Lock className="w-4 h-4 text-[#FF913D]" />
-            )}
-            <span>Syarat Membuka Hasil Kelompok:</span>
-          </div>
-          <p>
+          <img
+            className={`mission-map-traveler${animationStage === 'travel' ? ' is-traveling' : ''}`}
+            src="/assets/car.png"
+            alt="Tiko, gajah biru naik mobil berpindah menuju misi berikutnya"
+            style={{
+              '--desktop-center': `${desktopCarCenter}`,
+              '--phone-center': `${phoneCarCenter}`,
+              '--desktop-trail': `${Math.max(0, Math.min(100, ((desktopCarCenter - 108) / 1332) * 100))}%`,
+              '--phone-trail': `${Math.max(0, Math.min(100, (phoneCarCenter / 390) * 100))}%`,
+            } as React.CSSProperties}
+          />
+          <div className="mission-map-chalkboard" aria-hidden="true"><span>Matematika Itu Seru!</span></div>
+          <div className="mission-map-flowers" aria-hidden="true">✿　✿　✿</div>
+        </section>
+
+        <div className="mission-map-action">
+          <button
+            type="button"
+            disabled={!allCasesCompleted && !activeQuestion}
+            onClick={() => {
+              soundManager.playNextStep();
+              if (allCasesCompleted) onNavigate(isSubmitted ? 'evaluasi' : 'refleksi');
+              else if (activeQuestion) selectMission(activeQuestion.missionNumber);
+            }}
+          >
             {allCasesCompleted
-              ? `Selamat! Seluruh ${currentQuestions.length} kasus telah selesai dikerjakan. Hasil kelompok kini dapat dilihat.`
-              : `Kelompokmu telah menyelesaikan ${completeCount} dari ${currentQuestions.length} kasus. Selesaikan seluruh kasus untuk melihat hasil kelompok.`}
-          </p>
+              ? <>{isSubmitted ? 'Lihat Status Asesmen' : 'Tinjau Jawaban & Refleksi'}<ArrowRight size={19} /></>
+              : <>{`Mulai Misi ${activeQuestion?.missionNumber ?? 1}`}<ArrowRight size={19} /></>}
+          </button>
         </div>
-
-        <button
-          disabled={!allCasesCompleted}
-          onClick={handleProceedToReflection}
-          className={`w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-xs font-bold rounded-xl transition-all ${
-            allCasesCompleted
-              ? 'bg-[#FF913D] hover:bg-[#F2822B] text-white shadow-md cursor-pointer'
-              : 'bg-[#EAE3D9] text-[#8C7A70] cursor-not-allowed opacity-75'
-          }`}
-        >
-          <Award className="w-4 h-4" />
-          <span>{allCasesCompleted ? 'Isi Refleksi & Kirim' : `Terkunci (${completeCount}/${currentQuestions.length} Kasus Selesai)`}</span>
-        </button>
-      </div>
-
-      {/* Celebration Modal when 4th case is finished */}
-      <CelebrationModal
-        isOpen={celebrationOpen}
-        teamName={activeSubmission.team.teamName}
-        onProceedToPresentation={() => {
-          setCelebrationOpen(false);
-          onNavigate('refleksi');
-        }}
-        onClose={() => setCelebrationOpen(false)}
-      />
+      </main>
+      {arrivalMarker && animationStage === 'celebrating' && (
+        <MissionCelebrationOverlay
+          missionId={arrivalMarker.missionId}
+          isFinalMission={arrivalMarker.toDone >= currentQuestions.length}
+          onComplete={() => setAnimationStage('pause')}
+        />
+      )}
     </div>
   );
 };

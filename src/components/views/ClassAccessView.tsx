@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ArrowRight, KeyRound, ShieldCheck, AlertCircle, CheckCircle2, LoaderCircle, BookOpen, Users } from 'lucide-react';
 import { useAssessment } from '../../context/AssessmentContext';
 import { SchoolHeroIllustration } from '../illustrations/Illustrations';
+import { LoadingIndicator } from '../LoadingIndicator';
 
 interface Props {
   preloadedCode?: string;
@@ -89,6 +90,8 @@ export const ClassAccessView: React.FC<Props> = ({ preloadedCode = '', onSuccess
   };
 
   return (
+    <>
+    {busy && <LoadingIndicator label="Memvalidasi akses murid..." overlay />}
     <section className="adventure-page learning-page-enter relative mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
       <div className="absolute -right-3 top-8 h-24 w-24 rounded-full bg-[#FFE082]/60 blur-2xl" aria-hidden="true" />
       <div className="class-access-card relative grid items-center gap-8 overflow-hidden rounded-[2rem] border-2 border-white bg-white p-5 shadow-xl shadow-[#95634F]/10 sm:p-8 lg:grid-cols-[1fr_.8fr] lg:p-10">
@@ -126,5 +129,6 @@ export const ClassAccessView: React.FC<Props> = ({ preloadedCode = '', onSuccess
         </div>
       </div>
     </section>
+    </>
   );
 };

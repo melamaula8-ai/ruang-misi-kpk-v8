@@ -2,6 +2,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { X, ShieldCheck, Lock, User, AlertCircle, Mail } from 'lucide-react';
 import { useAssessment } from '../../context/AssessmentContext';
+import { LoadingIndicator } from '../LoadingIndicator';
 
 interface Props {
   isOpen: boolean;
@@ -251,6 +252,8 @@ export const TeacherLoginModal: React.FC<Props> = ({
   };
 
   return (
+    <>
+    {loading && <LoadingIndicator label="Memvalidasi akses guru..." overlay />}
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl max-w-md w-full p-6 sm:p-8 space-y-5 shadow-2xl border border-[#EAE3D9] relative animate-in fade-in duration-200">
         <button
@@ -483,5 +486,6 @@ export const TeacherLoginModal: React.FC<Props> = ({
         )}
       </div>
     </div>
+    </>
   );
 };

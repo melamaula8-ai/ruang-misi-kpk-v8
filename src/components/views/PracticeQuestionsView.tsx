@@ -169,12 +169,12 @@ export const PracticeQuestionsView: React.FC<Props> = ({ onNavigate }) => {
         <button
           onClick={() => {
             soundManager.playClick();
-            onNavigate('beranda');
+            onNavigate('belajar');
           }}
           className="flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-[#FAF8F5] text-[#3E2723] border border-[#EAE3D9] text-xs font-bold rounded-xl transition-colors cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Kembali ke Beranda</span>
+          <span>Kembali ke Materi</span>
         </button>
       </div>
 

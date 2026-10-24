@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useAssessment } from '../../context/AssessmentContext';
 import { getQuestionAnswerRows } from '../../utils/questionAnswerRows';
+import { RunningElephant } from '../RunningElephant';
 
 interface Props {
   onNavigate: (view: string) => void;
@@ -38,7 +39,7 @@ export const ResultsEvaluationView: React.FC<Props> = ({ onNavigate }) => {
   const evaluation = activeSubmission.evaluation;
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-8">
+    <div className="results-view max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-8">
       {/* Top Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#EAE3D9] pb-4">
         <div>
@@ -77,12 +78,19 @@ export const ResultsEvaluationView: React.FC<Props> = ({ onNavigate }) => {
 
       {/* Case 1: Status NOT PUBLISHED (Section D: Exact text requirement) */}
       {!isPublished && (
-        <div className="bg-white border border-[#EAE3D9] rounded-2xl p-8 sm:p-12 text-center space-y-6 shadow-xs max-w-2xl mx-auto">
-          <div className="w-20 h-20 bg-[#FFE082]/30 text-[#8C6D1F] rounded-full flex items-center justify-center mx-auto border-2 border-[#FFE082]">
-            <Clock className="w-10 h-10 text-[#FF913D]" />
-          </div>
+        <div className={`results-wait-card ${isPending ? 'results-wait-card-pending' : 'bg-white border border-[#EAE3D9] rounded-2xl p-8 sm:p-12 text-center space-y-6 shadow-xs max-w-2xl mx-auto'}`}>
+          {isPending ? (
+            <div className="results-wait-scene" aria-hidden="true">
+              <RunningElephant />
+              <span className="results-wait-bubble">Tiko menemanimu!</span>
+            </div>
+          ) : (
+            <div className="w-20 h-20 bg-[#FFE082]/30 text-[#8C6D1F] rounded-full flex items-center justify-center mx-auto border-2 border-[#FFE082]">
+              <Clock className="w-10 h-10 text-[#FF913D]" />
+            </div>
+          )}
 
-          <div className="space-y-3">
+          <div className={`space-y-3 ${isPending ? 'results-wait-copy' : ''}`}>
             {/* Section D: Pesan Wajib yang Ditetapkan */}
             <h2 className="text-xl sm:text-2xl font-extrabold text-[#3E2723] leading-snug">
               {isPending
@@ -107,8 +115,18 @@ export const ResultsEvaluationView: React.FC<Props> = ({ onNavigate }) => {
             </p>
           </div>
 
+          {isPending && (
+            <div className="results-review-steps" aria-label="Bagian yang sedang ditinjau guru">
+              <div><span>1</span><strong>Jawaban misi</strong></div>
+              <i aria-hidden="true" />
+              <div><span>2</span><strong>Presentasi</strong></div>
+              <i aria-hidden="true" />
+              <div><span>3</span><strong>Refleksi</strong></div>
+            </div>
+          )}
+
           {/* Submission Details */}
-          <div className="bg-[#FAF8F5] border border-[#EAE3D9] rounded-xl p-4 text-xs inline-flex flex-col sm:flex-row items-center gap-4 text-[#6D5A50]">
+          <div className={`${isPending ? 'results-wait-meta' : 'bg-[#FAF8F5] border border-[#EAE3D9] rounded-xl p-4 text-xs'} inline-flex flex-col sm:flex-row items-center gap-4 text-[#6D5A50]`}>
             <div>
               Status:{' '}
               <span className="font-bold text-[#3E2723]">

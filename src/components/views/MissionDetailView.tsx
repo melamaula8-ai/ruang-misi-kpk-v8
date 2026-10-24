@@ -21,6 +21,7 @@ import { NeutralMultiplesTable } from '../tools/NeutralMultiplesTable';
 import { useAssessment } from '../../context/AssessmentContext';
 import { soundManager } from '../../utils/sound';
 import { MissionSubmissionAnswers } from '../../types';
+import { queueMissionCelebrationAfterMission } from '../../utils/missionCelebration';
 
 interface Props {
   missionNumber: number;
@@ -70,7 +71,6 @@ export const MissionDetailView: React.FC<Props> = ({
   const [localAnswers, setLocalAnswers] = useState<MissionSubmissionAnswers>(
     () => currentAnswers
   );
-
   useEffect(() => {
     setActiveStep('step1');
     setShowHints(false);
@@ -174,6 +174,26 @@ export const MissionDetailView: React.FC<Props> = ({
   const handleFinishCase = () => {
     soundManager.playNextStep();
     handleManualSave();
+    const steps = [
+      ['step1', question.step1Fields],
+      ['step2', question.step2Fields],
+      ['step3', question.step3Fields],
+      ['step4', question.step4Fields],
+    ] as const;
+    const totalFields = steps.reduce((count, [, fields]) => count + fields.length, 0);
+    const filledCount = steps.reduce((count, [step, fields]) =>
+      count + fields.filter((field) => Boolean(localAnswers[step]?.[field.id]?.trim())).length, 0);
+    const isComplete = totalFields > 0 && (
+      filledCount >= Math.max(3, totalFields * 0.7) ||
+      (Boolean(localAnswers.step3 && Object.values(localAnswers.step3).some((value) => value.trim())) &&
+        Boolean(localAnswers.step4 && Object.values(localAnswers.step4).some((value) => value.trim())))
+    );
+    queueMissionCelebrationAfterMission(
+      activeSubmission.id,
+      question.id,
+      missionNumber,
+      isComplete,
+    );
     // Return to the dashboard of 4 cases
     onNavigate('misi');
   };

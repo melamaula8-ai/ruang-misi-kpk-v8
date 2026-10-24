@@ -1,0 +1,347 @@
+{
+  "name": "Ruang Misi KPK - Beranda Misi (laptop + HP)",
+  "for": "Claude Code / Claude. Implementasikan halaman beranda misi persis seperti spesifikasi ini. Jangan mengubah gambar, warna, atau gaya animasi.",
+  "language": "id",
+  "reference_artifact": "https://claude.ai/artifact/9YxZ3NKEEfRyzU4jjhdJcD",
+  "assets": {
+    "note": "PNG transparan dipotong langsung dari desain laptop asli. Pakai apa adanya, jangan digambar ulang sebagai SVG. Letakkan di /public/assets/.",
+    "elephant": {
+      "file": "assets/elephant.png",
+      "size": [
+        239,
+        190
+      ],
+      "use": "gajah di sapaan atas"
+    },
+    "car": {
+      "file": "assets/car.png",
+      "size": [
+        156,
+        142
+      ],
+      "use": "gajah naik mobil kuning, bergerak di jalan"
+    },
+    "mission_icons": {
+      "files": [
+        "assets/misi1.png",
+        "assets/misi2.png",
+        "assets/misi3.png",
+        "assets/misi4.png"
+      ],
+      "size": [
+        132,
+        132
+      ],
+      "shape": "lingkaran, sudah dipotong bulat",
+      "order": [
+        "Jadwal Piket Kelas",
+        "Lampu Lalu Lintas",
+        "Jadwal Olahraga",
+        "Belajar Bersama"
+      ]
+    }
+  },
+  "tokens": {
+    "fonts": {
+      "display": "Fredoka 500/600",
+      "body": "Nunito 500/700",
+      "fallback": "system-ui, sans-serif"
+    },
+    "colors": {
+      "bg_top": "#FFFAEC",
+      "bg_bottom": "#F6EFDA",
+      "text": "#5A3A22",
+      "text_muted": "#7A6455",
+      "border": "#EADFC8",
+      "road": "#8F8D86",
+      "road_edge": "#A9A69E",
+      "road_dash": "#FFFFFF",
+      "trail_done": "#5AA865",
+      "done": "#3E8B4F",
+      "done_ring": "#7DBE80",
+      "done_bg": "#EEF6EC",
+      "active": "#2F6FB3",
+      "active_ring": "#3F7FC1",
+      "locked": "#6F6A63",
+      "locked_ring": "#D6CFBF",
+      "locked_bg": "#F7F3E8",
+      "sign_wood": "#8A5A33",
+      "sign_post": "#6B4226",
+      "sign_text": "#FFF3DC",
+      "sun": "#F7C948",
+      "hill_1": "#D3E6B8",
+      "hill_2": "#B0D494",
+      "hill_3": "#8CBF76"
+    }
+  },
+  "state": {
+    "done": "jumlah misi selesai 0-4 (awal contoh: 1)",
+    "moving": "true selama mobil berjalan (1900 ms)",
+    "shown": "moving ? done-1 : done  -> dipakai untuk status bubble, pin, dan progres. Bubble baru berubah hijau setelah mobil tiba.",
+    "burst": "true 1300 ms setelah mobil tiba (bintang)",
+    "mission_status": "i < shown: selesai | i == shown: aktif | lainnya: terkunci",
+    "texts": {
+      "title": [
+        "Ayo mulai petualanganmu!",
+        "Ayo lanjutkan petualanganmu!",
+        "Ayo lanjutkan petualanganmu!",
+        "Ayo lanjutkan petualanganmu!",
+        "Hore, petualanganmu selesai!"
+      ],
+      "sub": [
+        "Kerjakan misi pertama dan temukan pola bilangan bersama Gajah!",
+        "Selesaikan semua misi dan temukan pola bilangan bersama Gajah!",
+        "Selesaikan semua misi dan temukan pola bilangan bersama Gajah!",
+        "Tinggal satu misi lagi, Gajah menunggumu!",
+        "Kamu dan Gajah sudah menemukan pola bilangan."
+      ],
+      "index_by": "shown"
+    }
+  },
+  "animations": {
+    "note": "Gaya animasi dari desain asli tidak ada di screenshot statis. Nilai di bawah adalah yang dipakai di prototipe. Jika aplikasi asli punya timing sendiri, pakai itu dan ganti nilai di sini.",
+    "car_drive": {
+      "property": "left",
+      "duration_ms": 1800,
+      "easing": "ease-in-out",
+      "trail_width_follows_car": true,
+      "idle": "float 2.6s ease-in-out infinite (naik turun 5px)",
+      "while_moving": "bob 0.3s ease-in-out infinite (getar 3px)"
+    },
+    "elephant_hero": "bob 2.6s ease-in-out infinite (naik turun 3px)",
+    "active_bubble": "ring 1.8s ease-in-out infinite (box-shadow biru 0 -> 12px, transparan)",
+    "mission_done": "pop 0.5s ease-out (skala 0.8 -> 1.14 -> 1)",
+    "progress_bar": "width 0.8s ease",
+    "stars_burst": {
+      "count": 4,
+      "duration_ms": 1300,
+      "effect": "naik 70px sambil memudar, menyebar kiri-kanan",
+      "colors": [
+        "#F7C948",
+        "#F29A3C",
+        "#5AA865",
+        "#6AA3DB"
+      ]
+    },
+    "sun": "berputar 40s linear infinite (sinar)",
+    "clouds": "drift horizontal 14-18 detik, alternate",
+    "reduced_motion": "matikan semua animasi dan transisi bila prefers-reduced-motion"
+  },
+  "layout": {
+    "laptop": {
+      "stage": [
+        1440,
+        960
+      ],
+      "header": {
+        "logo_box": [
+          47,
+          17,
+          73,
+          73
+        ],
+        "title": {
+          "x": 148,
+          "y": 28,
+          "size": 36
+        },
+        "shield_button": [
+          1220,
+          16,
+          77,
+          77
+        ],
+        "menu": [
+          1336,
+          30,
+          56,
+          56
+        ],
+        "divider_y": 105
+      },
+      "hero": {
+        "blob": [
+          47,
+          150,
+          272,
+          208
+        ],
+        "elephant": {
+          "x": 62,
+          "y": 158,
+          "w": 240
+        },
+        "title": {
+          "x": 338,
+          "y": 152,
+          "w": 500,
+          "size": 42
+        },
+        "sub": {
+          "x": 338,
+          "y": 250,
+          "w": 470,
+          "size": 22
+        }
+      },
+      "progress_card": [
+        864,
+        166,
+        463,
+        101
+      ],
+      "road": {
+        "x": 108,
+        "y": 562,
+        "h": 47,
+        "to": "right edge"
+      },
+      "start_sign": {
+        "x": 30,
+        "y": 520,
+        "text": "Mulai"
+      },
+      "bubbles": {
+        "centers_x": [
+          432,
+          714,
+          996,
+          1278
+        ],
+        "pin": [
+          56,
+          68
+        ],
+        "pin_top": 398,
+        "circle": 140,
+        "circle_top": 457,
+        "ring": 6,
+        "platform": [
+          56,
+          26
+        ],
+        "icon_inside": 128
+      },
+      "labels": {
+        "top": 612,
+        "w": 182,
+        "line1": {
+          "text": "Misi N",
+          "size": 24
+        },
+        "line2": {
+          "size": 17
+        }
+      },
+      "car": {
+        "w": 136,
+        "h": 124,
+        "top": 482,
+        "center_x_by_done": [
+          206,
+          573,
+          855,
+          1137,
+          1362
+        ]
+      },
+      "action_button": {
+        "top": 760,
+        "w": 380,
+        "h": 68,
+        "label": "Mulai Misi N (prototipe: langsung menyelesaikan misi)"
+      },
+      "scenery": "matahari kanan atas, awan, bukit 3 lapis, pagar kiri bawah, semak, bunga, papan 'Matematika Itu Seru!' kanan bawah miring -8 derajat"
+    },
+    "phone": {
+      "stage": [
+        390,
+        844
+      ],
+      "header": {
+        "logo_box": [
+          20,
+          12,
+          40,
+          40
+        ],
+        "title_size": 20,
+        "buttons": "keamanan 44x44 dan menu 44x44"
+      },
+      "hero": {
+        "elephant_blob": [
+          122,
+          96
+        ],
+        "elephant_w": 108,
+        "title_size": 24,
+        "sub_size": 14,
+        "layout": "gajah kiri, teks kanan"
+      },
+      "progress_card": {
+        "margin": "12px 20px",
+        "icon": 40,
+        "text": "Progres Misi + N dari 4 + bar 10px"
+      },
+      "road": {
+        "y_in_scene": 122,
+        "h": 34,
+        "note": "di HP jalan berada DI BAWAH bubble supaya mobil tidak menutupi ikon"
+      },
+      "bubbles": {
+        "columns_x": [
+          55,
+          137,
+          219,
+          301
+        ],
+        "column_w": 82,
+        "centers_x": [
+          96,
+          178,
+          260,
+          342
+        ],
+        "circle": 74,
+        "ring": 4,
+        "icon_inside": 66,
+        "pin": [
+          30,
+          38
+        ]
+      },
+      "labels": {
+        "top_in_scene": 166,
+        "w": 76,
+        "line1_size": 13,
+        "line2_size": 12
+      },
+      "car": {
+        "w": 64,
+        "h": 58,
+        "top_in_scene": 98,
+        "center_x_by_done": [
+          52,
+          96,
+          178,
+          260,
+          342
+        ]
+      },
+      "action_button": {
+        "w": "full",
+        "h": 52
+      },
+      "touch_targets": "minimal 44px"
+    },
+    "breakpoint": "lebar >= 900px pakai layout laptop, di bawahnya layout HP. Untuk lebar di antaranya, skalakan stage laptop (transform: scale) atau ubah ke fluid."
+  },
+  "implementation_notes": [
+    "Pecah menjadi komponen: Header, Hero, ProgressCard, MissionRoad, MissionBubble, Car, ActionButton, Scenery.",
+    "Posisi mobil dan lebar jejak hijau dihitung dari state done memakai tabel center_x_by_done.",
+    "Bubble dan jejak jalan pakai transition yang sama durasinya dengan mobil supaya terlihat bersamaan.",
+    "Jangan ubah gambar di assets/. Jangan membuat ulang gajah atau mobil sebagai SVG.",
+    "Tombol aksi di prototipe hanya untuk demo. Di aplikasi asli, panggil go() ketika misi benar-benar selesai.",
+    "Tambahkan aria-label pada tombol ikon, dan hormati prefers-reduced-motion."
+  ]
+}

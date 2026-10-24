@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { House, Volume2, VolumeX } from 'lucide-react';
 import { AssessmentProvider, useAssessment } from './context/AssessmentContext';
 import { isTeamIdentityComplete } from './utils/teamIdentity';
@@ -19,6 +19,9 @@ import { TeacherLoginModal } from './components/modals/TeacherLoginModal';
 import { ClassAccessView } from './components/views/ClassAccessView';
 import { SchoolHeroIllustration } from './components/illustrations/Illustrations';
 import { soundManager } from './utils/sound';
+import { LoadingIndicator } from './components/LoadingIndicator';
+import { WelcomeSplash } from './components/WelcomeSplash';
+import { LearningJourneyView } from './components/views/LearningJourneyView';
 
 function BackgroundMusic({ active, enabled }: { active: boolean; enabled: boolean }) {
   const audioRef = React.useRef<HTMLAudioElement | null>(null);
@@ -27,7 +30,7 @@ function BackgroundMusic({ active, enabled }: { active: boolean; enabled: boolea
     const audio = audioRef.current;
     if (!audio) return;
 
-    audio.volume = 0.14;
+    audio.volume = 0.28;
     if (!active || !enabled) {
       audio.pause();
       return;
@@ -67,6 +70,8 @@ function BackgroundMusic({ active, enabled }: { active: boolean; enabled: boolea
 function MainApp() {
   const {
     isTeacherLoggedIn,
+    currentTrack,
+    learningContent,
     hasTimeExpired,
     hasVerifiedGroupToken,
     activeSubmission,
@@ -75,8 +80,12 @@ function MainApp() {
     dismissSessionDeletedNotice,
   } = useAssessment();
   const [currentView, setCurrentView] = useState<string>('beranda');
+  const [showWelcomeSplash, setShowWelcomeSplash] = useState(true);
   const [showRoleLanding, setShowRoleLanding] = useState(true);
+  const [roleEntryLoading, setRoleEntryLoading] = useState<'student' | 'teacher' | null>(null);
+  const roleEntryStartedAt = React.useRef(0);
   const [activeMissionNumber, setActiveMissionNumber] = useState(1);
+  const [showAnswerPreview, setShowAnswerPreview] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [classCodeFromLink] = useState(() => {
     try { const params = new URLSearchParams(window.location.search); return (params.get('kelas') || params.get('class') || params.get('token') || '').trim().toUpperCase(); } catch { return ''; }
@@ -85,6 +94,54 @@ function MainApp() {
   const [musicEnabled, setMusicEnabled] = useState(true);
   const [musicBlockedForPractice, setMusicBlockedForPractice] = useState(false);
   const [hasEnteredMissionMap, setHasEnteredMissionMap] = useState(false);
+  const [learningStep, setLearningStep] = useState(1);
+  const [maxLearningStep, setMaxLearningStep] = useState(1);
+  const [learningJourneyComplete, setLearningJourneyComplete] = useState(false);
+  const [hasOpenedPractice, setHasOpenedPractice] = useState(false);
+
+  useEffect(() => {
+    const playClickForButton = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const button = target.closest('button, [role="button"], input[type="button"], input[type="submit"], input[type="reset"]');
+      if (!button || button.matches(':disabled, [aria-disabled="true"]')) return;
+      soundManager.playButtonClick();
+    };
+
+    // Pasang pada document agar tombol di modal portal dan elemen aplikasi
+    // lain di luar root React juga mendapat efek suara.
+    document.addEventListener('click', playClickForButton, true);
+    return () => document.removeEventListener('click', playClickForButton, true);
+  }, []);
+
+  useEffect(() => {
+    if (!roleEntryLoading || cloudStatus === 'connecting') return;
+    const remainingMinimum = Math.max(0, 2000 - (Date.now() - roleEntryStartedAt.current));
+    const timer = window.setTimeout(() => {
+      if (roleEntryLoading === 'student') {
+        setShowRoleLanding(false);
+        setLearningStep(1);
+        setMaxLearningStep(1);
+        setLearningJourneyComplete(false);
+        setHasOpenedPractice(false);
+        setCurrentView('beranda');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else if (isTeacherLoggedIn) {
+        setShowRoleLanding(false);
+        setCurrentView('dashboard-guru');
+      } else {
+        setIsLoginModalOpen(true);
+      }
+      setRoleEntryLoading(null);
+    }, remainingMinimum);
+    return () => window.clearTimeout(timer);
+  }, [roleEntryLoading, cloudStatus, isTeacherLoggedIn]);
+
+  const beginRoleEntry = (role: 'student' | 'teacher') => {
+    if (roleEntryLoading) return;
+    roleEntryStartedAt.current = Date.now();
+    setRoleEntryLoading(role);
+  };
 
   // Halaman yang hanya boleh dibuka siswa yang sudah memverifikasi ID Kelompok.
   const STUDENT_SESSION_VIEWS = ['pintu', 'identitas', 'misi', 'countdown', 'misi-detail'];
@@ -140,6 +197,11 @@ function MainApp() {
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
+    if (view === 'latihan' && !isTeacherLoggedIn && !learningJourneyComplete) {
+      setCurrentView('belajar');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
     if (view === 'dashboard-guru' && !isTeacherLoggedIn) {
       setIsLoginModalOpen(true);
       return;
@@ -189,6 +251,42 @@ function MainApp() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleCountdownComplete = () => {
+    // Countdown is only reachable after class and team identity checks in handleSelectMission.
+    // Enter the selected student's assessment directly after the rocket animation finishes.
+    setHasEnteredMissionMap(true);
+    setCurrentView('misi-detail');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const navigateFromMissionDetail = (view: string) => {
+    if (view === 'misi' && showAnswerPreview) {
+      setCurrentView('refleksi');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    handleNavigate(view);
+  };
+
+  const editMissionFromPreview = (missionNum: number) => {
+    if (!hasVerifiedGroupToken) {
+      setCurrentView('kelas');
+      return;
+    }
+    if (!isTeamIdentityComplete(activeSubmission.team)) {
+      returnToIncompleteIdentity();
+      return;
+    }
+    setActiveMissionNumber(missionNum);
+    setCurrentView('misi-detail');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  if (showWelcomeSplash) return <>
+    <BackgroundMusic active enabled={musicEnabled} />
+    <WelcomeSplash onStart={() => setShowWelcomeSplash(false)} musicEnabled={musicEnabled} onToggleMusic={() => setMusicEnabled((enabled) => !enabled)} />
+  </>;
+
   return (
     <div className="min-h-screen w-full max-w-full min-w-0 flex flex-col bg-[#FAF8F5] text-[#2D231E]">
       <BackgroundMusic active={!musicBlockedForPractice && (showRoleLanding || currentView === 'beranda')} enabled={musicEnabled} />
@@ -199,7 +297,7 @@ function MainApp() {
         </button>
       )}
       {/* Landing page sengaja hanya menampilkan pilihan peran. */}
-      {!showRoleLanding && (
+      {!showRoleLanding && currentView !== 'misi' && (
         <>
         <div className="border-b border-[#F0E4D7] bg-[#FFF7DC] px-4 py-2">
           <div className="mx-auto flex max-w-7xl justify-start">
@@ -234,31 +332,39 @@ function MainApp() {
       )}
 
       {/* Main View Area */}
-      <main className="flex-1 pb-16">
+      <main className={`flex-1 ${currentView === 'misi' ? 'pb-0' : 'pb-16'}`}>
         {showRoleLanding ? (
           <RoleLandingView
-            onStudent={() => {
-              setShowRoleLanding(false);
-              setCurrentView('beranda');
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }}
-            onTeacher={() => {
-              if (isTeacherLoggedIn) {
-                setShowRoleLanding(false);
-                setCurrentView('dashboard-guru');
-              } else {
-                setIsLoginModalOpen(true);
-              }
-            }}
+            onStudent={() => beginRoleEntry('student')}
+            onTeacher={() => beginRoleEntry('teacher')}
           />
         ) : (
           <>
         {currentView === 'beranda' && <HomeView onNavigate={handleNavigate} />}
+        {currentView === 'belajar' && (
+          <LearningJourneyView
+            step={learningStep}
+            maxStep={maxLearningStep}
+            content={learningContent.published}
+            trackName={currentTrack}
+            onStepChange={(step) => {
+              setLearningStep(step);
+              setMaxLearningStep((maxStep) => Math.max(maxStep, step));
+            }}
+            onStart={() => {
+              setLearningJourneyComplete(true);
+              setHasOpenedPractice(true);
+              setCurrentView('latihan');
+              setMusicBlockedForPractice(true);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+          />
+        )}
         {currentView === 'kelas' && (
           <ClassAccessView
             preloadedCode={classCodeFromLink}
             onSuccess={() => { setCurrentView('identitas'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-            onBack={() => { setCurrentView('latihan'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+            onBack={() => { setCurrentView(learningJourneyComplete ? 'latihan' : 'belajar'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
           />
         )}
         {currentView === 'pintu' && <TrackSelectionView onNavigate={handleNavigate} />}
@@ -275,20 +381,27 @@ function MainApp() {
           />
         )}
         {currentView === 'countdown' && (
-          <CountdownView missionNumber={activeMissionNumber} onNavigate={handleNavigate} />
+          <CountdownView missionNumber={activeMissionNumber} onNavigate={handleCountdownComplete} />
         )}
         {currentView === 'misi-detail' && (
           <MissionDetailView
             missionNumber={activeMissionNumber}
-            onNavigate={handleNavigate}
+            onNavigate={navigateFromMissionDetail}
             onSelectMission={handleSelectMission}
           />
         )}
-        {currentView === 'latihan' && (
-          <PracticeQuestionsView onNavigate={handleNavigate} />
+        {(currentView === 'latihan' || (hasOpenedPractice && currentView === 'belajar')) && (
+          <div className={currentView === 'latihan' ? '' : 'hidden'}>
+            <PracticeQuestionsView onNavigate={handleNavigate} />
+          </div>
         )}
         {currentView === 'presentasi' && <PresentationView onNavigate={handleNavigate} />}
-        {currentView === 'refleksi' && <ReflectionView onNavigate={handleNavigate} />}
+        {currentView === 'refleksi' && <ReflectionView
+          onNavigate={handleNavigate}
+          previewOpen={showAnswerPreview}
+          onPreviewOpen={setShowAnswerPreview}
+          onEditMission={editMissionFromPreview}
+        />}
 
         {currentView === 'evaluasi' && <ResultsEvaluationView onNavigate={handleNavigate} />}
         {currentView === 'dashboard-guru' && (
@@ -298,18 +411,18 @@ function MainApp() {
         )}
       </main>
 
-      {!showRoleLanding && !isTeacherLoggedIn && ['identitas', 'pintu', 'misi', 'misi-detail', 'latihan', 'evaluasi'].includes(currentView) && (
+      {!showRoleLanding && !isTeacherLoggedIn && currentView !== 'misi' && ['identitas', 'pintu', 'misi', 'misi-detail', 'latihan', 'evaluasi'].includes(currentView) && (
         <div className="mx-auto mb-8 w-full max-w-6xl px-4 sm:px-6">
           <div className="learning-card flex items-center gap-4 overflow-hidden rounded-2xl border border-[#E8E9D1] bg-gradient-to-r from-[#F4F9E9] via-white to-[#FFF7DC] p-4 sm:p-5">
             <SchoolHeroIllustration className="h-20 w-20 shrink-0 sm:h-24 sm:w-24" />
-            <div className="min-w-0 flex-1"><p className="text-sm font-black text-[#3E2723] sm:text-base">Teman Misi menyemangatimu!</p><p className="mt-1 text-xs leading-5 text-[#6D5A50]">Baca petunjuk dengan teliti, diskusikan strategi bersama anggota tim, dan jangan lupa memeriksa kembali jawabanmu.</p></div>
+            <div className="min-w-0 flex-1"><p className="text-sm font-black text-[#3E2723] sm:text-base">Tiko menyemangatimu!</p><p className="mt-1 text-xs leading-5 text-[#6D5A50]">Baca petunjuk dengan teliti, diskusikan strategi bersama anggota tim, dan jangan lupa memeriksa kembali jawabanmu.</p></div>
             <span className="hidden h-3 w-3 rounded-full bg-[#FF913D] shadow-sm sm:block" aria-hidden="true" />
           </div>
         </div>
       )}
 
       {/* Clean Educational Footer */}
-      <footer className="border-t border-[#EAE3D9] bg-white py-8 text-xs text-[#6D5A50]">
+      {currentView !== 'misi' && <footer className="border-t border-[#EAE3D9] bg-white py-8 text-xs text-[#6D5A50]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-6 h-6 rounded bg-[#95634F] text-[#FFE082] flex items-center justify-center font-bold text-xs">
@@ -322,10 +435,11 @@ function MainApp() {
           </div>
 
           <div className="text-center sm:text-right text-[#8C7A70]">
-            Teaching at the Right Level (TaRL) · 4 Tahap Polya · 25 Menit Investigasi
+            <p>Web aplikasi ini dibuat oleh <strong className="text-[#6D5A50]">Mela Minkhatul Maula</strong></p>
+            <p className="mt-1">Teaching at the Right Level (TaRL) · 4 Tahap Polya · 25 Menit Investigasi</p>
           </div>
         </div>
-      </footer>
+      </footer>}
 
       {/* Teacher Login Modal */}
       <TeacherLoginModal
@@ -338,6 +452,17 @@ function MainApp() {
         }}
       />
 
+      {roleEntryLoading && (
+        <LoadingIndicator
+          label={roleEntryLoading === 'student' ? 'Menyiapkan ruang belajarmu...' : 'Menyiapkan ruang guru...'}
+          overlay
+        />
+      )}
+
+      {cloudStatus === 'connecting' && (
+        (isTeacherLoggedIn && currentView === 'dashboard-guru') ||
+        (hasVerifiedGroupToken && !isTeacherLoggedIn && ['identitas', 'pintu', 'misi', 'countdown', 'misi-detail', 'evaluasi'].includes(currentView))
+      ) && <LoadingIndicator label={currentView === 'evaluasi' ? 'Memuat hasil siswa...' : 'Memvalidasi akses dan memuat halaman...'} overlay />}
 
     </div>
   );

@@ -1,9 +1,28 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
 import { createFakeD1 } from './fakeD1';
 import { handleSync, handleTeacherAuth, handleClasses, handleGroupToken, issueTeacherToken, type Env } from '../server/core';
 
 const SECRET = 'rahasia-uji-yang-cukup-panjang-1234567890';
+
+test('migrasi sesi mempertahankan kelompok lama dan hanya menghubungkan classId yang terbukti', () => {
+  const db = new DatabaseSync(':memory:');
+  for (const migration of ['0001_init.sql', '0002_classes.sql', '0003_teacher_accounts_ownership.sql']) {
+    db.exec(readFileSync(new URL(`../migrations/${migration}`, import.meta.url), 'utf8'));
+  }
+  db.prepare("INSERT INTO classes (id, teacher_username, name, join_code, status, created_at) VALUES ('class-known', 'guru', 'Kelas Lama', 'KELAS-LAMA1', 'active', 1)").run();
+  db.prepare("INSERT INTO group_tokens (id, code, status, data, updated_at, owner_id) VALUES ('group-known', 'KPK-LAMA-111', 'available', ?, 1, 'guru')")
+    .run(JSON.stringify({ id: 'group-known', code: 'KPK-LAMA-111', classId: 'class-known' }));
+  db.prepare("INSERT INTO group_tokens (id, code, status, data, updated_at, owner_id) VALUES ('group-unmapped', 'KPK-LAMA-222', 'available', ?, 1, 'guru')")
+    .run(JSON.stringify({ id: 'group-unmapped', code: 'KPK-LAMA-222', classId: 'class-missing' }));
+  db.exec(readFileSync(new URL('../migrations/0004_exam_sessions.sql', import.meta.url), 'utf8'));
+  assert.equal((db.prepare("SELECT session_id FROM group_tokens WHERE id = 'group-known'").get() as any).session_id, 'class-known');
+  assert.equal((db.prepare("SELECT session_id FROM group_tokens WHERE id = 'group-unmapped'").get() as any).session_id, null);
+  assert.equal((db.prepare('SELECT COUNT(*) AS n FROM group_tokens').get() as any).n, 2);
+  db.close();
+});
 function makeEnv(): Env & { DB: ReturnType<typeof createFakeD1> } {
   return { DB: createFakeD1(), TEACHER_USERNAME: 'guru', TEACHER_PASSWORD_HASH: 'pbkdf2-sha256$210000$dGVzdC1zYWx0LTAxMjM0NTY3$nl_C_y6KSSxGvuhem6RfVT_2xKGg7jNAWmaBwRF4tE8', TEACHER_SESSION_SECRET: SECRET };
 }
@@ -249,18 +268,41 @@ test('sesi kelompok hanya dibuat otomatis setelah kode kelas sah diverifikasi', 
   assert.match(result.token.code, /^KPK-[A-Z2-9]{3}-[A-Z2-9]{3}$/);
 });
 
-test('ID yang dibuat guru terikat ke akun dan submission siswa masuk ke monitoring pemilik', async () => {
+test('kelompok guru wajib dibuat di sesi milik guru; submission tetap masuk ke monitoring pemilik', async () => {
   const env = makeEnv();
   const teacher = await teacherToken(env);
-  const response = await handleGroupToken(new Request('http://x/api/group-token', {
+  const missingSession = await handleGroupToken(new Request('http://x/api/group-token', {
     method: 'POST', headers: { Authorization: `Bearer ${teacher}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ quantity: 2, prefix: 'KPK' }),
+  }), env);
+  assert.equal(missingSession.status, 400);
+  assert.equal((await call(env, 'POST', { token: teacher, body: { upsertTokens: [{ id: 'no-session', code: 'KPK-NO-SESSION', status: 'available' }] } })).status, 400,
+    'endpoint sinkronisasi juga tidak bisa membuat kelompok tanpa sesi');
+  const createdSession = await handleClasses(new Request('http://x/api/classes', {
+    method: 'POST', headers: { Authorization: `Bearer ${teacher}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Asesmen Kelas 5A' }),
+  }), env);
+  const sessionId = (await createdSession.json() as any).class.id as string;
+  const wrongOwner = await handleGroupToken(new Request('http://x/api/group-token', {
+    method: 'POST', headers: { Authorization: `Bearer ${await issueTeacherToken(env, 'guru-lain')}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ quantity: 2, sessionId }),
+  }), env);
+  assert.equal(wrongOwner.status, 404);
+  const response = await handleGroupToken(new Request('http://x/api/group-token', {
+    method: 'POST', headers: { Authorization: `Bearer ${teacher}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ quantity: 2, prefix: 'KPK', sessionId }),
   }), env);
   assert.equal(response.status, 201);
   const issued = (await response.json() as any).tokens as Array<{ id: string; code: string; classId: string; classCode: string }>;
   assert.equal(issued.length, 2);
   assert.match(issued[0].code, /^KPK-GURU-[A-Z2-9]{6}$/);
   assert.ok(issued[0].classId && issued[0].classCode);
+  assert.ok(issued.every((group) => group.classId === sessionId), 'semua kelompok terkait ke sesi yang dipilih');
+  const movedSession = await handleClasses(new Request('http://x/api/classes', {
+    method: 'POST', headers: { Authorization: `Bearer ${teacher}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Sesi Lain' }),
+  }), env);
+  const movedSessionId = (await movedSession.json() as any).class.id;
+  assert.equal((await call(env, 'POST', { token: teacher, body: { upsertTokens: [{ ...issued[0], classId: movedSessionId }] } })).status, 403,
+    'kelompok yang sudah dibuat tidak dapat dipindahkan lewat sinkronisasi');
 
   const assigned = { ...issued[0], status: 'available' };
   assert.equal((await claim(env, assigned, 'student-session-1')).status, 200);
@@ -275,11 +317,50 @@ test('ID yang dibuat guru terikat ke akun dan submission siswa masuk ke monitori
   assert.equal(otherData.body.tokens.length, 0);
 });
 
+test('guru menghapus sesi aktif beserta seluruh ID kelompok dan data pengerjaannya', async () => {
+  const env = makeEnv();
+  const teacher = await teacherToken(env);
+  const created = await handleClasses(new Request('http://x/api/classes', {
+    method: 'POST', headers: { Authorization: `Bearer ${teacher}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Sesi Aktif' }),
+  }), env);
+  const session = (await created.json() as any).class;
+  const issued = await handleGroupToken(new Request('http://x/api/group-token', {
+    method: 'POST', headers: { Authorization: `Bearer ${teacher}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: session.id, quantity: 1 }),
+  }), env);
+  const group = (await issued.json() as any).tokens[0];
+  assert.equal((await claim(env, group, 'student-live-session')).status, 200);
+  assert.equal((await call(env, 'POST', { body: { upsertSubmissions: [sub('student-live-session', group)] } })).status, 200);
+  await env.DB.prepare('INSERT INTO revoked_sessions (submission_id, group_code, revoked_at) VALUES (?, ?, ?)')
+    .bind('student-live-session', group.code, Date.now()).run();
+
+  const wrongOwnerDelete = await handleClasses(new Request('http://x/api/classes', {
+    method: 'DELETE', headers: { Authorization: `Bearer ${await issueTeacherToken(env, 'guru-lain')}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ id: session.id }),
+  }), env);
+  assert.equal(wrongOwnerDelete.status, 404);
+  const deleted = await handleClasses(new Request('http://x/api/classes', {
+    method: 'DELETE', headers: { Authorization: `Bearer ${teacher}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ id: session.id }),
+  }), env);
+  assert.equal(deleted.status, 200);
+  assert.equal((await (await handleClasses(new Request('http://x/api/classes', { headers: { Authorization: `Bearer ${teacher}` } }), env)).json() as any).classes.length, 0);
+  assert.equal((await env.DB.prepare('SELECT COUNT(*) AS n FROM classes WHERE id = ?').bind(session.id).first<any>()).n, 0);
+  assert.equal((await env.DB.prepare('SELECT COUNT(*) AS n FROM group_tokens WHERE id = ? OR code = ?').bind(group.id, group.code).first<any>()).n, 0);
+  assert.equal((await env.DB.prepare('SELECT COUNT(*) AS n FROM submissions WHERE id = ?').bind('student-live-session').first<any>()).n, 0);
+  const tombstone = await env.DB.prepare('SELECT group_code FROM revoked_sessions WHERE submission_id = ?').bind('student-live-session').first<any>();
+  assert.equal(tombstone.group_code, null, 'tombstone tetap mencegah pemulihan oleh klien lama tanpa menyimpan ID kelompok');
+  assert.equal((await call(env, 'POST', { body: { upsertSubmissions: [sub('student-live-session', group, { answers: { edited: true } })] } })).status, 409);
+  assert.equal((await claim(env, group, 'student-another-session')).status, 409);
+  assert.equal((await handleGroupToken(new Request('http://x/api/group-token', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ classCode: session.joinCode }),
+  }), env)).status, 404);
+});
+
 test('ID lama yang belum memiliki metadata kelas tetap dapat mengirim hasil', async () => {
   const env = makeEnv();
   const teacher = await teacherToken(env);
   const oldToken = { id: 'old-token-1', code: 'KPK-LAMA-123456', status: 'available', createdAt: new Date().toISOString() };
-  assert.equal((await call(env, 'POST', { token: teacher, body: { upsertTokens: [oldToken] } })).status, 200);
+  await env.DB.prepare("INSERT INTO group_tokens (id, code, status, claimed_by, data, updated_at, owner_id) VALUES (?, ?, 'available', NULL, ?, ?, 'legacy')")
+    .bind(oldToken.id, oldToken.code, JSON.stringify(oldToken), Date.now()).run();
+  assert.equal((await call(env, 'GET', { token: teacher })).status, 200, 'data lama diadopsi tanpa memerlukan sesi baru');
   assert.equal((await claim(env, oldToken, 'old-student-session')).status, 200);
   assert.equal((await call(env, 'POST', { body: { upsertSubmissions: [sub('old-student-session', oldToken)] } })).status, 200);
   const monitored = await call(env, 'GET', { token: teacher });

@@ -142,7 +142,10 @@ export async function handleClasses(request: Request, env: Env): Promise<Respons
   if (request.method === 'GET') {
     if (teacherIdentity) {
       const rows = await env.DB.prepare(
-        'SELECT id, name, join_code AS joinCode, status, created_at AS createdAt FROM classes WHERE teacher_username = ? ORDER BY created_at DESC'
+        `SELECT c.id, c.name, c.join_code AS joinCode, c.status, c.created_at AS createdAt,
+          (SELECT COUNT(*) FROM group_tokens g WHERE g.session_id = c.id) AS groupCount,
+          (SELECT COUNT(*) FROM group_tokens g WHERE g.session_id = c.id AND g.status = 'claimed') AS participantCount
+          FROM classes c WHERE c.teacher_username = ? AND c.status <> 'deleted' ORDER BY c.created_at DESC`
       ).bind(teacherIdentity).all();
       return json({ classes: rows.results });
     }
@@ -154,6 +157,51 @@ export async function handleClasses(request: Request, env: Env): Promise<Respons
     ).bind(code).first<any>();
     if (!row) return json({ error: 'Kode kelas tidak ditemukan atau kelas sudah ditutup.' }, 404);
     return json({ class: row });
+  }
+
+  if (request.method === 'DELETE') {
+    if (!teacherIdentity) return json({ error: 'Hanya guru pemilik yang dapat menghapus sesi ujian.' }, 401);
+    let body: any;
+    try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+    const sessionId = typeof body?.id === 'string' ? body.id : '';
+    if (!sessionId) return json({ error: 'ID sesi wajib diisi.' }, 400);
+    const owned = await env.DB.prepare('SELECT id FROM classes WHERE id = ? AND teacher_username = ?')
+      .bind(sessionId, teacherIdentity).first();
+    if (!owned) return json({ error: 'Sesi ujian tidak ditemukan atau bukan milik akun ini.' }, 404);
+    const now = Date.now();
+    await env.DB.batch([
+      // Revoke every currently claimed student session before deleting its data.
+      // Keep no group code in the tombstone: it only prevents stale clients from
+      // restoring the deleted submission after this batch commits.
+      env.DB.prepare(`INSERT OR IGNORE INTO revoked_sessions (submission_id, group_code, revoked_at)
+        SELECT claimed_by, NULL, ? FROM group_tokens
+        WHERE (session_id = ? OR json_extract(data, '$.classId') = ?) AND owner_id = ? AND claimed_by IS NOT NULL`)
+        .bind(now, sessionId, sessionId, teacherIdentity),
+      env.DB.prepare(`INSERT OR IGNORE INTO revoked_sessions (submission_id, group_code, revoked_at)
+        SELECT s.id, NULL, ? FROM submissions s
+        WHERE s.owner_id = ? AND (
+          s.group_code IN (SELECT code FROM group_tokens WHERE (session_id = ? OR json_extract(data, '$.classId') = ?) AND owner_id = ?)
+          OR json_extract(s.data, '$.groupId') IN (SELECT id FROM group_tokens WHERE (session_id = ? OR json_extract(data, '$.classId') = ?) AND owner_id = ?)
+        )`).bind(now, teacherIdentity, sessionId, sessionId, teacherIdentity, sessionId, sessionId, teacherIdentity),
+      // Existing tombstones from individual group deletion can contain the code;
+      // erase it too so no group ID remains in persistence after session deletion.
+      env.DB.prepare(`UPDATE revoked_sessions SET group_code = NULL WHERE submission_id IN (
+        SELECT claimed_by FROM group_tokens WHERE (session_id = ? OR json_extract(data, '$.classId') = ?) AND owner_id = ? AND claimed_by IS NOT NULL
+        UNION
+        SELECT s.id FROM submissions s WHERE s.owner_id = ? AND (
+          s.group_code IN (SELECT code FROM group_tokens WHERE (session_id = ? OR json_extract(data, '$.classId') = ?) AND owner_id = ?)
+          OR json_extract(s.data, '$.groupId') IN (SELECT id FROM group_tokens WHERE (session_id = ? OR json_extract(data, '$.classId') = ?) AND owner_id = ?)
+        )
+      )`).bind(sessionId, sessionId, teacherIdentity, teacherIdentity, sessionId, sessionId, teacherIdentity, sessionId, sessionId, teacherIdentity),
+      env.DB.prepare(`DELETE FROM submissions WHERE owner_id = ? AND (
+        group_code IN (SELECT code FROM group_tokens WHERE (session_id = ? OR json_extract(data, '$.classId') = ?) AND owner_id = ?)
+        OR json_extract(data, '$.groupId') IN (SELECT id FROM group_tokens WHERE (session_id = ? OR json_extract(data, '$.classId') = ?) AND owner_id = ?)
+      )`).bind(teacherIdentity, sessionId, sessionId, teacherIdentity, sessionId, sessionId, teacherIdentity),
+      env.DB.prepare("DELETE FROM group_tokens WHERE (session_id = ? OR json_extract(data, '$.classId') = ?) AND owner_id = ?")
+        .bind(sessionId, sessionId, teacherIdentity),
+      env.DB.prepare('DELETE FROM classes WHERE id = ? AND teacher_username = ?').bind(sessionId, teacherIdentity),
+    ]);
+    return json({ ok: true, deletedSessionId: sessionId, deletedGroupIds: true });
   }
 
   if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
@@ -194,30 +242,32 @@ export async function handleGroupToken(request: Request, env: Env): Promise<Resp
   // Ini membuat sesi siswa tersimpan pada owner_id yang sama dengan dashboard guru.
   if (teacherIdentity) {
     const quantity = Math.max(1, Math.min(50, Number.isInteger(body?.quantity) ? body.quantity : 1));
+    const sessionId = typeof body?.sessionId === 'string' ? body.sessionId : '';
+    if (!sessionId) return json({ error: 'Buka sesi ujian terlebih dahulu sebelum membuat kelompok.' }, 400);
+    const session = await env.DB.prepare("SELECT id, name, join_code FROM classes WHERE id = ? AND teacher_username = ? AND status = 'active'")
+      .bind(sessionId, teacherIdentity).first<any>();
+    if (!session) return json({ error: 'Sesi ujian tidak ditemukan, tidak aktif, atau bukan milik akun ini.' }, 404);
     const prefix = (typeof body?.prefix === 'string' ? body.prefix : 'KPK').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) || 'KPK';
     const accountTag = teacherIdentity.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12) || 'GURU';
-    const requestedName = typeof body?.className === 'string' ? body.className.trim().slice(0, 80) : '';
-    const className = requestedName || `Kelas ${teacherIdentity}`;
+    const className = session.name;
     for (let attempt = 0; attempt < 5; attempt += 1) {
-      const classId = crypto.randomUUID();
-      const classCode = `KELAS-${randomCode(6)}`;
       const now = Date.now();
       const tokens: any[] = Array.from({ length: quantity }, () => {
         const code = `${prefix}-${accountTag}-${randomCode(6)}`;
         return {
           id: crypto.randomUUID(), code, status: 'available',
-          createdAt: new Date(now).toISOString(), classId, className, classCode,
+          createdAt: new Date(now).toISOString(), classId: session.id, className, classCode: session.join_code,
         };
       });
       try {
         const statements = [env.DB.prepare(
-          "INSERT INTO classes (id, teacher_username, name, join_code, status, group_count, created_at) VALUES (?, ?, ?, ?, 'active', ?, ?)"
-        ).bind(classId, teacherIdentity, className, classCode, quantity, now)];
+          "UPDATE classes SET group_count = group_count + ? WHERE id = ? AND teacher_username = ? AND status = 'active'"
+        ).bind(quantity, session.id, teacherIdentity)];
         for (const token of tokens) statements.push(env.DB.prepare(
-          "INSERT INTO group_tokens (id, code, status, claimed_by, data, updated_at, owner_id) VALUES (?, ?, 'available', NULL, ?, ?, ?)"
-        ).bind(token.id, token.code, JSON.stringify(token), now, teacherIdentity));
+          "INSERT INTO group_tokens (id, code, status, claimed_by, data, updated_at, owner_id, session_id) VALUES (?, ?, 'available', NULL, ?, ?, ?, ?)"
+        ).bind(token.id, token.code, JSON.stringify(token), now, teacherIdentity, session.id));
         await env.DB.batch(statements);
-        return json({ success: true, tokens, class: { id: classId, name: className, joinCode: classCode } }, 201);
+        return json({ success: true, tokens, class: { id: session.id, name: className, joinCode: session.join_code } }, 201);
       } catch (error) {
         if (/UNIQUE/i.test(String(error))) continue;
         console.error('[group-token] Gagal membuat ID kelas guru:', error);
@@ -246,8 +296,8 @@ export async function handleGroupToken(request: Request, env: Env): Promise<Resp
       if (!reserved.meta?.changes) return json({ error: 'Kelas ini sudah mencapai batas 50 kelompok atau sudah ditutup. Hubungi guru.' }, 429);
       try {
         await env.DB.prepare(
-          `INSERT INTO group_tokens (id, code, status, claimed_by, data, updated_at, owner_id) VALUES (?, ?, 'available', NULL, ?, ?, ?)`
-        ).bind(id, code, JSON.stringify(token), now, classroom.teacher_username || 'legacy').run();
+          `INSERT INTO group_tokens (id, code, status, claimed_by, data, updated_at, owner_id, session_id) VALUES (?, ?, 'available', NULL, ?, ?, ?, ?)`
+        ).bind(id, code, JSON.stringify(token), now, classroom.teacher_username || 'legacy', classroom.id).run();
         return json({ success: true, token, class: { id: classroom.id, name: classroom.name, joinCode: classroom.join_code } }, 201);
       } catch (error) {
         await env.DB.prepare('UPDATE classes SET group_count = CASE WHEN group_count > 0 THEN group_count - 1 ELSE 0 END WHERE id = ?').bind(classroom.id).run();
@@ -277,8 +327,8 @@ const parse = (text: string) => { try { return JSON.parse(text); } catch { retur
 const upper = (v: unknown) => (typeof v === 'string' ? v.trim().toUpperCase() : '');
 
 const SQL = {
-  upsertToken: `INSERT INTO group_tokens (id, code, status, claimed_by, data, updated_at, owner_id) VALUES (?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET code = excluded.code, status = excluded.status, claimed_by = excluded.claimed_by, data = excluded.data, updated_at = excluded.updated_at WHERE group_tokens.owner_id = excluded.owner_id`,
+  upsertToken: `INSERT INTO group_tokens (id, code, status, claimed_by, data, updated_at, owner_id, session_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET code = excluded.code, status = excluded.status, claimed_by = excluded.claimed_by, data = excluded.data, updated_at = excluded.updated_at WHERE group_tokens.owner_id = excluded.owner_id AND group_tokens.session_id IS excluded.session_id`,
   upsertSubmissionTeacher: `INSERT INTO submissions (id, group_code, data, updated_at, owner_id) VALUES (?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET group_code = excluded.group_code, data = excluded.data, updated_at = excluded.updated_at WHERE submissions.owner_id = excluded.owner_id`,
   tombstone: `INSERT OR IGNORE INTO revoked_sessions (submission_id, group_code, revoked_at)
@@ -391,8 +441,17 @@ async function handlePost(request: Request, env: Env, teacherIdentity: string | 
       const batch: D1Stmt[] = [];
       for (const token of upsertTokens as any[]) {
         const code = upper(token.code);
+        const sessionId = typeof token.classId === 'string' && token.classId ? token.classId : null;
+        const existing = await db.prepare('SELECT session_id FROM group_tokens WHERE id = ? AND owner_id = ?').bind(token.id, teacherIdentity).first<any>();
+        if (existing) {
+          if ((existing.session_id || null) !== sessionId) throw new SyncError('FORBIDDEN', 'Kelompok tidak dapat dipindahkan ke sesi lain.', 403);
+        } else {
+          if (!sessionId) throw new SyncError('SESSION_REQUIRED', 'Buat sesi ujian sebelum menambahkan kelompok.', 400);
+          const ownedSession = await db.prepare("SELECT id FROM classes WHERE id = ? AND teacher_username = ? AND status = 'active'").bind(sessionId, teacherIdentity).first();
+          if (!ownedSession) throw new SyncError('FORBIDDEN', 'Sesi kelompok tidak valid atau bukan milik akun ini.', 403);
+        }
         const data = { ...token, code };
-        batch.push(db.prepare(SQL.upsertToken).bind(token.id, code, String(token.status || 'available'), token.claimedBySubmissionId ?? null, JSON.stringify(data), now, teacherIdentity));
+        batch.push(db.prepare(SQL.upsertToken).bind(token.id, code, String(token.status || 'available'), token.claimedBySubmissionId ?? null, JSON.stringify(data), now, teacherIdentity, sessionId));
         // Sesi yang dicabut guru dicatat permanen agar tidak bisa disimpan lagi oleh perangkat siswa.
         for (const sid of Array.isArray(token.revokedSubmissionIds) ? token.revokedSubmissionIds : []) {
           if (typeof sid === 'string' && sid) batch.push(db.prepare(`INSERT OR IGNORE INTO revoked_sessions (submission_id, group_code, revoked_at)
@@ -473,8 +532,12 @@ async function handlePost(request: Request, env: Env, teacherIdentity: string | 
       const code = upper(incoming.groupCode);
       if (!code) throw new SyncError('FORBIDDEN', 'Jawaban harus terhubung dengan ID kelompok.', 403);
       if (await isRevoked(db, incoming.id)) throw new SyncError('SESSION_DELETED', 'Sesi ini telah dihapus oleh guru. Masukkan kembali ID kelompok untuk memulai sesi baru.', 409);
-      const tokenRow = await db.prepare('SELECT id, status, claimed_by FROM group_tokens WHERE code = ?').bind(code).first();
+      const tokenRow = await db.prepare('SELECT id, status, claimed_by, session_id FROM group_tokens WHERE code = ?').bind(code).first<any>();
       if (!tokenRow) throw new SyncError('TOKEN_MISSING', 'ID kelompok tidak terdaftar.', 409);
+      if (tokenRow.session_id) {
+        const openSession = await db.prepare("SELECT 1 AS x FROM classes WHERE id = ? AND status = 'active'").bind(tokenRow.session_id).first();
+        if (!openSession) throw new SyncError('FORBIDDEN', 'Sesi ujian sudah ditutup atau dihapus; jawaban baru tidak dapat dikirim.', 403);
+      }
       const hasGroupSubmission = Boolean(await db.prepare('SELECT 1 AS x FROM submissions WHERE group_code = ? LIMIT 1').bind(code).first());
       const sessionClaim = await db.prepare("SELECT id FROM group_tokens WHERE status = 'claimed' AND claimed_by = ? LIMIT 1").bind(incoming.id).first();
       if (tokenRow.status !== 'claimed' || incoming.groupId !== tokenRow.id || (tokenRow.claimed_by !== incoming.id && !hasGroupSubmission) || (sessionClaim && sessionClaim.id !== tokenRow.id)) {

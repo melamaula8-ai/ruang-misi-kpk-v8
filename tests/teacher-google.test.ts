@@ -163,7 +163,7 @@ test('data antar guru terpisah: kelas dan ID kelompok guru A tidak terlihat oleh
   assert.equal(listA.classes.length, 1);
   assert.equal(listB.classes.length, 0);
 
-  const save = await handleSync(post('sync', { upsertTokens: [{ id: 't1', code: 'KPK-AAA-111', status: 'available' }] }, auth(tokenA)), env);
+  const save = await handleSync(post('sync', { upsertTokens: [{ id: 't1', code: 'KPK-AAA-111', status: 'available', classId: listA.classes[0].id }] }, auth(tokenA)), env);
   assert.equal(save.status, 200);
   const seenB = await (await handleSync(new Request('http://x/api/sync', { headers: auth(tokenB) }), env)).json() as any;
   assert.equal(seenB.tokens.length, 0);
