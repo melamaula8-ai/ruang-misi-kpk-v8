@@ -1694,9 +1694,19 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ credential, username: u, password: p, confirmPassword }),
       });
+      const responseText = await response.text();
       let data: { token?: unknown; error?: unknown } = {};
-      try { data = await response.json(); } catch { /* ditangani di bawah */ }
-      if (!response.ok) return { success: false, message: typeof data.error === "string" ? data.error : "Pendaftaran belum berhasil. Pastikan aplikasi dijalankan lewat npm run pages:dev." };
+      try { data = JSON.parse(responseText) as typeof data; } catch { /* respons non-JSON ditangani dengan status HTTP */ }
+      if (!response.ok) {
+        if (typeof data.error === "string") return { success: false, message: data.error };
+        const contentType = response.headers.get("content-type") || "tanpa Content-Type";
+        return {
+          success: false,
+          message: contentType.includes("application/json")
+            ? `Pendaftaran ditolak server (HTTP ${response.status}), tetapi server tidak mengirim pesan kesalahan.`
+            : `Endpoint pendaftaran tidak mengirim JSON (HTTP ${response.status}; ${contentType}). Periksa Pages Function /api/teacher-register pada deployment yang sedang dibuka.`,
+        };
+      }
       if (typeof data.token !== "string" || !data.token) return { success: false, message: "Token sesi tidak diterima." };
       sessionStorage.setItem("ruang_misi_kpk_teacher_token", data.token);
       setIsTeacherLoggedIn(true);
