@@ -26,6 +26,7 @@ import {
   Copy,
   Check,
   LoaderCircle,
+  RefreshCw,
 } from 'lucide-react';
 import {
   LearningTrack,
@@ -71,6 +72,7 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
     deleteGroupToken,
     removeExamSessionData,
     cloudStatus,
+    refreshFromCloud,
     learningContent,
     saveLearningDraft,
     publishLearningDraft,
@@ -79,6 +81,20 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
   const [activeTab, setActiveTab] = useState<
     'ringkasan' | 'penilaian' | 'kelompok' | 'akses_kelas' | 'editor' | 'bank_soal' | 'rubrik' | 'rekap'
   >('ringkasan');
+  const [lastSessionRefresh, setLastSessionRefresh] = useState<Date | null>(null);
+  const [isRefreshingSession, setIsRefreshingSession] = useState(false);
+
+  const handleRefreshSessionData = async () => {
+    setIsRefreshingSession(true);
+    try {
+      await refreshFromCloud();
+      setLastSessionRefresh(new Date());
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Data belum berhasil dimuat ulang.');
+    } finally {
+      setIsRefreshingSession(false);
+    }
+  };
 
   // Currently selected submission for grading
   const selectedSubmission =
@@ -331,24 +347,40 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
     };
   };
 
-  const handleSaveEvaluation = () => {
-    if (selectedSubmission) saveEvaluation(selectedSubmission.id, buildEvaluation());
+  const refreshBeforeTeacherWrite = async () => {
+    try {
+      await refreshFromCloud();
+      return true;
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Data terbaru belum berhasil dimuat.');
+      return false;
+    }
   };
 
-  const handlePublishResults = () => {
+  const handleSaveEvaluation = async () => {
     if (!selectedSubmission) return;
-    const result = publishEvaluationResults(selectedSubmission.id, buildEvaluation());
+    const evaluation = buildEvaluation();
+    if (await refreshBeforeTeacherWrite()) saveEvaluation(selectedSubmission.id, evaluation);
+  };
+
+  const handlePublishResults = async () => {
+    if (!selectedSubmission) return;
+    const evaluation = buildEvaluation();
+    if (!(await refreshBeforeTeacherWrite())) return;
+    const result = publishEvaluationResults(selectedSubmission.id, evaluation);
     if (!result.success) window.alert(result.message);
   };
 
-  const handleRequestRevisionSubmit = () => {
+  const handleRequestRevisionSubmit = async () => {
     if (!revisionNotes.trim()) return;
+    if (!(await refreshBeforeTeacherWrite())) return;
     requestRevision(selectedSubmission.id, revisionNotes, allowedSections);
     setRevisionModalOpen(false);
   };
 
-  const handleReopenSubmit = () => {
+  const handleReopenSubmit = async () => {
     if (!reopenReason.trim()) return;
+    if (!(await refreshBeforeTeacherWrite())) return;
     reopenAssessment(selectedSubmission.id, reopenReason, teacherNameInput);
     setReopenModalOpen(false);
   };
@@ -659,6 +691,7 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
           </section>
           {tokenNotice && <div role="status" className="rounded-xl border border-[#DCE9C6] bg-[#F4F9E9] px-4 py-3 text-sm font-semibold text-[#42631D]">{tokenNotice}</div>}
           <section className="space-y-4 rounded-2xl border border-[#EAE3D9] bg-white p-5 shadow-sm sm:p-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-[#FAF8F5] px-4 py-3"><p className="text-xs font-semibold text-[#6D5A50]" aria-live="polite">Terakhir diperbarui {lastSessionRefresh ? lastSessionRefresh.toLocaleTimeString('id-ID', { hour12: false }) : '—'}</p><button type="button" onClick={() => void handleRefreshSessionData()} disabled={isRefreshingSession} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-[#D8CFC8] bg-white px-3 py-2 text-xs font-bold text-[#3E2723] transition hover:bg-[#FFF7EE] disabled:cursor-wait disabled:opacity-60"><RefreshCw className={`h-4 w-4 ${isRefreshingSession ? 'animate-spin' : ''}`} />{isRefreshingSession ? 'Memuat data…' : 'Muat Ulang Data'}</button></div>
             <div className="flex flex-wrap items-end justify-between gap-3"><div><h3 className="text-lg font-black text-[#3E2723]">Kelompok dalam sesi ini</h3><p className="mt-1 text-xs text-[#6D5A50]">Salin kode atau link akses untuk setiap kelompok.</p></div><span className="rounded-full bg-[#FAF8F5] px-3 py-1.5 text-xs font-extrabold text-[#95634F]">{sessionGroupTokens.length} kelompok · {sessionGroupTokens.filter(token => token.status === 'claimed').length} sudah mengakses</span></div>
             {!selectedExamSession ? <div className="rounded-2xl border-2 border-dashed border-[#E8D8CE] bg-[#FFFCF7] px-5 py-10 text-center text-sm text-[#6D5A50]">Pilih sesi ujian terlebih dahulu untuk melihat dan membuat kelompok.</div> : sessionGroupTokens.length === 0 ? <div className="rounded-2xl border-2 border-dashed border-[#E8D8CE] bg-[#FFFCF7] px-5 py-10 text-center"><KeyRound className="mx-auto h-8 w-8 text-[#95634F]"/><p className="mt-3 font-black text-[#3E2723]">Belum ada kelompok di sesi ini</p><p className="mt-1 text-sm text-[#6D5A50]">Gunakan tombol Buat Kelompok di atas.</p></div> : <div className="grid gap-3 lg:grid-cols-2">{sessionGroupTokens.slice().sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).map(token => {
               const linkedSubmission = allSubmissions.find(submission => submission.id === token.claimedBySubmissionId || submission.groupId === token.id || submission.groupCode?.toUpperCase() === token.code.toUpperCase());
@@ -905,6 +938,21 @@ export const TeacherDashboardView: React.FC<Props> = ({ onNavigate }) => {
               </button>
             ))}
           </div>
+
+          {selectedSubmission && Object.entries(selectedSubmission.answers || {}).filter(([questionId]) => !questions.some((question) => question.id === questionId)).length > 0 && (
+            <section className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4" aria-label="Jawaban tidak terpetakan">
+              <div>
+                <h3 className="text-sm font-extrabold text-[#3E2723]">Jawaban tidak terpetakan</h3>
+                <p className="mt-1 text-xs text-[#6D5A50]">Kunci soal berikut tidak ada di daftar soal guru; isi jawaban tetap ditampilkan agar dapat diperiksa.</p>
+              </div>
+              {Object.entries(selectedSubmission.answers || {}).filter(([questionId]) => !questions.some((question) => question.id === questionId)).map(([questionId, answer]) => (
+                <div key={questionId} className="rounded-lg border border-amber-200 bg-white p-3">
+                  <strong className="font-mono text-xs text-[#3E2723]">{questionId}</strong>
+                  <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all text-xs text-[#6D5A50]">{JSON.stringify(answer, null, 2)}</pre>
+                </div>
+              ))}
+            </section>
+          )}
 
           {/* Active Mission Inspection Box */}
           {(() => {

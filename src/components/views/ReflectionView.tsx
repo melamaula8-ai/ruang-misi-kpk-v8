@@ -10,13 +10,17 @@ import {
   HelpCircle,
   Sparkles,
   Info,
+  Lightbulb,
+  Flag,
+  Star,
 } from 'lucide-react';
-import { ReflectionIllustration } from '../illustrations/Illustrations';
 import { useAssessment } from '../../context/AssessmentContext';
 import { soundManager } from '../../utils/sound';
 import { LoadingIndicator } from '../LoadingIndicator';
 import { ReflectionData } from '../../types';
 import { queueMissionCelebrationAfterSubmit } from '../../utils/missionCelebration';
+import { TikoSays } from '../tiko/TikoSays';
+import { SceneBackdrop } from '../tiko/SceneBackdrop';
 
 interface Props {
   onNavigate: (view: string) => void;
@@ -166,6 +170,9 @@ export const ReflectionView: React.FC<Props> = ({ onNavigate, previewOpen, onPre
       placeholder: 'Jelaskan bagaimana kalian saling bertanya, memeriksa ulang di kalender, atau memanfaatkan petunjuk didaktis...',
     },
   ];
+  const reflectionFilledCount = questionsList.filter((item) => Boolean(reflectionData[item.id]?.trim())).length;
+  const starters = ['Kami belajar bahwa…', 'Yang paling sulit adalah…', 'Kami memeriksa lagi dengan…', 'Menurut kami…'];
+  const journalIcons = [Lightbulb, Flag, Star, HelpCircle];
 
   const renderSubmitConfirmation = () => submitModalOpen && (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
@@ -230,15 +237,15 @@ export const ReflectionView: React.FC<Props> = ({ onNavigate, previewOpen, onPre
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-8">
+    <div className="tk-reflection-page max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-7">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#EAE3D9] pb-4">
         <div>
-          <span className="text-xs font-bold uppercase tracking-wider text-[#95634F]">
-            Refleksi dan Evaluasi Proses Belajar
+          <span className="tk-sticker">
+            JURNAL PETUALANG
           </span>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-[#3E2723] tracking-tight">
-            Refleksi Perjalanan Misi Tim
+          <h1 className="mt-3 text-2xl sm:text-3xl font-extrabold text-[#3E2723] tracking-tight">
+            Ceritakan perjalanan tim
           </h1>
           <p className="text-xs sm:text-sm text-[#6D5A50] mt-1">
             Renungkan pengalaman belajarmu agar pemahaman matematika dan keterampilan kolaborasi terus bertumbuh.
@@ -250,12 +257,12 @@ export const ReflectionView: React.FC<Props> = ({ onNavigate, previewOpen, onPre
           {isDirty ? (
             <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold rounded-full shadow-xs">
               <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-              <span>Ada perubahan belum disimpan manual</span>
+              <span>Menyimpan otomatis…</span>
             </div>
           ) : (
             <div className="flex items-center gap-1.5 px-3 py-1 bg-[#C5E68A]/30 border border-[#A8D468] text-[#2D231E] text-xs font-semibold rounded-full">
               <CheckCircle2 className="w-3.5 h-3.5 text-[#4A671E]" />
-              <span>Semua refleksi tersimpan rapi</span>
+              <span>Tersimpan otomatis</span>
             </div>
           )}
         </div>
@@ -279,35 +286,27 @@ export const ReflectionView: React.FC<Props> = ({ onNavigate, previewOpen, onPre
         </div>
       )}
 
-      {/* Hero Banner */}
-      <div className="bg-white border border-[#EAE3D9] rounded-2xl p-6 sm:p-8 flex flex-col md:flex-row items-center gap-6 shadow-xs">
-        <div className="w-24 h-24 sm:w-28 sm:h-28 bg-[#FAF8F5] rounded-xl border border-[#EAE3D9] flex items-center justify-center p-2 shrink-0">
-          <ReflectionIllustration className="w-20 h-20" />
-        </div>
-        <div className="space-y-2">
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#FFE082]/40 text-[#6F4736] text-[11px] font-extrabold uppercase border border-[#FFE082]">
-            <Sparkles className="w-3 h-3 text-[#FF913D]" />
-            <span>Kolom Terbuka untuk Diketik & Diedit</span>
-          </div>
-          <h2 className="text-lg font-bold text-[#3E2723]">
-            Jurnal Evaluasi Diri & Pengalaman Belajar
-          </h2>
-          <p className="text-xs text-[#5D4E46] leading-relaxed">
-            Diskusikan bersama kelompokmu untuk menjawab 4 pertanyaan refleksi di bawah ini secara jujur dan terbuka. Seluruh kolom bebas diklik, diketik, dan diedit kapan saja.
-          </p>
-        </div>
-      </div>
+      <section className="tk-journal-banner">
+        <div><h2>Empat pos untuk mengingat perjalananmu</h2><p>Diskusikan dengan kelompok, lalu isi dengan kata-katamu sendiri.</p></div>
+        <TikoSays text="Tidak perlu buru-buru. Ceritakan yang benar-benar kamu alami." size={128} side="left" mood="curious" />
+      </section>
+
+      <section className="tk-reflection-progress" aria-label="Progres refleksi">
+        <div className="tk-progress-road"><span style={{ width: `${reflectionFilledCount * 25}%` }} />{questionsList.map((item, index) => <span key={item.id} className={`tk-progress-star${reflectionData[item.id]?.trim() ? ' is-filled' : ''}`} style={{ left: `${12.5 + index * 25}%` }} aria-hidden="true"><Star size={15} fill="currentColor" /></span>)}</div>
+        <div><strong>{reflectionFilledCount} dari 4 pos terisi</strong><span>{reflectionFilledCount === 4 ? 'Jurnal tim lengkap!' : 'Isi satu pos lagi untuk melanjutkan.'}</span></div>
+      </section>
 
       {/* 4 Reflection Questions - Always Clickable & Editable */}
-      <div className="bg-white border border-[#EAE3D9] rounded-2xl p-6 sm:p-8 space-y-6 shadow-xs">
-        {questionsList.map((item) => (
-          <div key={item.id} className="space-y-2.5 border-b border-[#EAE3D9]/60 pb-6 last:border-b-0 last:pb-0">
+      <div className="tk-journal-book">
+        {questionsList.map((item) => {
+          const JournalIcon = journalIcons[item.num - 1];
+          return <section key={item.id} className="tk-journal-stop">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <label
                 htmlFor={`reflection-${item.id}`}
-                className="text-xs sm:text-sm font-bold text-[#3E2723] block leading-snug cursor-pointer"
+                className="text-base sm:text-lg font-bold text-[#3E2723] block leading-snug cursor-pointer"
               >
-                {item.num}. {item.q}
+                <span className={`tk-journal-pin${reflectionData[item.id]?.trim() ? ' is-filled' : ''}`}><span><JournalIcon size={17} aria-hidden="true" />{item.num}</span></span>{item.q}
               </label>
               <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-[#FAF8F5] text-[#8C7A70] border border-[#EAE3D9]">
                 {item.badge}
@@ -322,10 +321,11 @@ export const ReflectionView: React.FC<Props> = ({ onNavigate, previewOpen, onPre
               value={reflectionData[item.id] || ''}
               onChange={(e) => handleChange(item.id, e.target.value)}
               placeholder={item.placeholder}
-              className="box-border h-40 min-h-[140px] max-h-[180px] w-full min-w-0 resize-y px-4 py-3 bg-[#FAF8F5] hover:bg-white focus:bg-white border border-[#D8CFC8] focus:border-[#FF913D] rounded-xl text-xs sm:text-sm lg:text-base font-medium text-[#2D231E] placeholder:text-[#A8988F] focus:outline-none focus:ring-2 focus:ring-[#FF913D]/30 transition-all cursor-text shadow-2xs"
+              className="tk-journal-input box-border h-40 min-h-[140px] max-h-[180px] w-full min-w-0 resize-y px-4 py-3 bg-[#FAF8F5] hover:bg-white focus:bg-white border border-[#D8CFC8] focus:border-[#FF913D] rounded-xl text-base font-medium text-[#2D231E] placeholder:text-[#A8988F] focus:outline-none focus:ring-2 focus:ring-[#FF913D]/30 transition-all cursor-text"
             />
-          </div>
-        ))}
+            <div className="tk-journal-starters" aria-label="Contoh pembuka kalimat">{starters.slice(0, 2).map((starter) => <button type="button" key={starter} onClick={() => handleChange(item.id, `${reflectionData[item.id]?.trim() ? `${reflectionData[item.id].trim()} ` : ''}${starter}`)}>{starter}</button>)}</div>
+          </section>;
+        })}
       </div>
 
       {/* Action Buttons */}

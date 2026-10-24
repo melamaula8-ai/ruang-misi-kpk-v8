@@ -98,6 +98,7 @@ interface AssessmentContextType {
   customLogoUrl: string | null;
   updateCustomLogo: (logoUrlOrBase64: string | null) => void;
   cloudStatus: 'connecting' | 'online' | 'offline';
+  refreshFromCloud: () => Promise<void>;
   sessionDeletedNotice: boolean;
   dismissSessionDeletedNotice: () => void;
 }
@@ -440,6 +441,8 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [sessionDeletedNotice, setSessionDeletedNotice] = useState(false);
   const lastPushedSnapshot = useRef('');
   const lastRemoteSnapshot = useRef('');
+  const hasPendingLocalChanges = useRef(false);
+  const pendingPushVersion = useRef(0);
   const applyingRemote = useRef(false);
   const cloudHeaders = (jsonBody = false): HeadersInit => {
     const headers: Record<string, string> = { Accept: 'application/json' };
@@ -502,6 +505,8 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     setActiveTokenCode('');
     setSessionDeletedNotice(true);
     lastPushedSnapshot.current = '';
+    hasPendingLocalChanges.current = false;
+    pendingPushVersion.current += 1;
     window.setTimeout(() => { applyingRemote.current = false; }, 0);
   };
 
@@ -622,7 +627,20 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     });
     lastPushedSnapshot.current = snapshot;
     lastRemoteSnapshot.current = JSON.stringify(data);
+    hasPendingLocalChanges.current = false;
     window.setTimeout(() => { applyingRemote.current = false; }, 0);
+  };
+
+  const refreshFromCloud = async () => {
+    const response = await fetch('/api/sync', { headers: cloudHeaders(), cache: 'no-store' });
+    if (response.status === 401 && isTeacherLoggedIn) {
+      logoutTeacher();
+      throw new Error('Sesi guru berakhir. Silakan masuk kembali.');
+    }
+    if (!response.ok) throw new Error(`Database refresh returned ${response.status}`);
+    const data = await response.json();
+    applyCloudData(data);
+    setCloudStatus('online');
   };
 
   // First connection: hydrate from the shared database; seed it only when the database is empty.
@@ -674,7 +692,12 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     if (!cloudReady || applyingRemote.current) return;
     const current = JSON.parse(buildSnapshot());
     const currentString = JSON.stringify(current);
-    if (currentString === lastPushedSnapshot.current) return;
+    if (currentString === lastPushedSnapshot.current) {
+      hasPendingLocalChanges.current = false;
+      return;
+    }
+    hasPendingLocalChanges.current = true;
+    const pushVersion = ++pendingPushVersion.current;
     const timeout = window.setTimeout(async () => {
       try {
         const previous = lastPushedSnapshot.current ? JSON.parse(lastPushedSnapshot.current) : { tokens: [], submissions: [], settings: {} };
@@ -704,7 +727,10 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           }
           throw new Error(`Database save returned ${response.status}`);
         }
-        lastPushedSnapshot.current = currentString;
+        if (pushVersion === pendingPushVersion.current) {
+          lastPushedSnapshot.current = currentString;
+          hasPendingLocalChanges.current = false;
+        }
         setCloudStatus('online');
       } catch (error) {
         console.error('[Ruang Misi KPK] Could not sync changes:', error);
@@ -731,9 +757,7 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           !isTeacherLoggedIn && Boolean(activeTokenCode) && data.sessionRevoked === true;
         if (
           remoteString !== lastRemoteSnapshot.current &&
-          (activeSessionWasDeleted ||
-            !lastPushedSnapshot.current ||
-            buildSnapshot() === lastPushedSnapshot.current)
+          (activeSessionWasDeleted || !hasPendingLocalChanges.current)
         ) {
           applyCloudData(data);
         }
@@ -1687,6 +1711,7 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           reviewedAt: undefined,
           publishedAt: undefined,
           answers: retainHistoryAsVersion ? sub.answers : {},
+          ...(!retainHistoryAsVersion ? { resetAnswers: true } : {}),
           history: [
             ...sub.history,
             {
@@ -1964,6 +1989,7 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         customLogoUrl,
         updateCustomLogo,
         cloudStatus,
+        refreshFromCloud,
         sessionDeletedNotice,
         dismissSessionDeletedNotice: () => setSessionDeletedNotice(false),
       }}

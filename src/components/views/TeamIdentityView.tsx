@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { ArrowLeft, ArrowRight, Save, Users, CheckCircle2, AlertCircle, RotateCcw } from 'lucide-react';
 import { useAssessment } from '../../context/AssessmentContext';
 import { getTeamIdentityValidationErrors } from '../../utils/teamIdentity';
-import { SchoolHeroIllustration } from '../illustrations/Illustrations';
+import { TikoSays } from '../tiko/TikoSays';
+import { BookOpen, ClipboardList, Compass, Calculator, Mic2 } from 'lucide-react';
 
 interface Props {
   onNavigate: (view: string, identityValidated?: boolean) => void;
@@ -16,6 +17,7 @@ const PREDEFINED_ROLES = [
   'Pemeriksa perhitungan',
   'Penyaji hasil',
 ];
+const roleIcons = [BookOpen, ClipboardList, Compass, Calculator, Mic2];
 
 export const TeamIdentityView: React.FC<Props> = ({ onNavigate, validationAttempt = 0 }) => {
   const {
@@ -138,13 +140,10 @@ export const TeamIdentityView: React.FC<Props> = ({ onNavigate, validationAttemp
   };
 
   return (
-    <div className="adventure-page w-full max-w-5xl min-w-0 mx-auto px-4 sm:px-6 py-8 space-y-7">
-      <section className="identity-hero relative overflow-hidden rounded-[2rem] border-2 border-white bg-gradient-to-r from-[#F1F9E4] via-white to-[#FFF3D4] p-5 shadow-lg sm:p-7">
-        <div className="absolute -left-8 -top-10 h-36 w-36 rounded-full bg-[#C5E68A]/40 blur-2xl" aria-hidden="true" />
-        <div className="relative grid items-center gap-4 sm:grid-cols-[1fr_140px]">
-          <div><span className="inline-flex items-center gap-2 rounded-full bg-white/90 px-3 py-1.5 text-xs font-black text-[#4A671E] shadow-sm"><Users className="h-4 w-4"/> SIAPKAN TIM HEBATMU</span><h2 className="mt-3 text-2xl font-black leading-tight text-[#3E2723] sm:text-3xl">Setiap anggota punya peran penting!</h2><p className="mt-2 max-w-xl text-sm leading-6 text-[#6D5A50]">Isi nama kelompok, sekolah, dan anggota. Pilih peran yang cocok, saling bantu, lalu mulai petualangan KPK bersama-sama.</p><div className="mt-3 flex flex-wrap gap-2 text-xs font-extrabold"><span className="rounded-full bg-white px-3 py-1.5 text-[#4A671E] shadow-sm">Saling mendengarkan</span><span className="rounded-full bg-white px-3 py-1.5 text-[#9A5A18] shadow-sm">Berbagi tugas</span><span className="rounded-full bg-white px-3 py-1.5 text-[#95634F] shadow-sm">Cek jawaban bersama</span></div></div>
-          <div className="mx-auto w-28 sm:w-36"><SchoolHeroIllustration className="h-auto w-full drop-shadow-sm" /></div>
-        </div>
+    <div className="tk-team-page adventure-page w-full max-w-5xl min-w-0 mx-auto px-4 sm:px-6 py-8 space-y-7">
+      <section className="tk-team-hero">
+        <div><span className="tk-sticker"><Users className="h-4 w-4"/> KARTU ANGGOTA KRU</span><h2>Siapkan timmu</h2><p>Setiap petualang punya peran. Kenalan dulu, lalu berangkat bersama Tiko.</p></div>
+        <TikoSays text={errorMessage || (savedNotification ? 'Tim hebat sudah siap! Tiko bangga dengan kalian.' : 'Halo, kru petualang! Ayo bagi tugas dengan adil.') } size={140} side="left" mood={errorMessage ? 'thinking' : savedNotification ? 'proud' : 'happy'} />
       </section>
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#EAE3D9] pb-4">
@@ -185,12 +184,7 @@ export const TeamIdentityView: React.FC<Props> = ({ onNavigate, validationAttemp
         </div>
       </div>
 
-      {errorMessage && (
-        <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl font-medium">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          <span>{errorMessage}</span>
-        </div>
-      )}
+      {errorMessage && <div className="tk-team-validation" role="alert"><AlertCircle className="w-5 h-5 shrink-0" /><TikoSays text={errorMessage} size={76} side="left" mood="thinking" /></div>}
 
       {savedNotification && (
         <div className="flex items-center gap-2 p-3 bg-[#C5E68A]/30 border border-[#A8D468] text-[#2D231E] text-xs rounded-xl font-bold">
@@ -210,8 +204,8 @@ export const TeamIdentityView: React.FC<Props> = ({ onNavigate, validationAttemp
       <div className="w-full min-w-0 bg-white border border-[#EAE3D9] rounded-2xl p-4 sm:p-8 space-y-6 shadow-xs">
         {/* Basic Info */}
         <div className="grid grid-cols-1 gap-4">
-          <div className="space-y-1.5">
-            <label htmlFor="team-name" className="text-xs font-bold text-[#3E2723] block">
+          <div className="tk-team-field space-y-1.5">
+            <label htmlFor="team-name" className="tk-label-sticker text-xs font-bold text-[#3E2723] block">
               Nama Kelompok <span className="text-red-500">*</span>
             </label>
             <input
@@ -239,8 +233,8 @@ export const TeamIdentityView: React.FC<Props> = ({ onNavigate, validationAttemp
             )}
           </div>
 
-          <div className="space-y-1.5">
-            <label htmlFor="school-name" className="text-xs font-bold text-[#3E2723] block">
+          <div className="tk-team-field space-y-1.5">
+            <label htmlFor="school-name" className="tk-label-sticker text-xs font-bold text-[#3E2723] block">
               Nama Sekolah <span className="text-red-500">*</span>
             </label>
             <input
@@ -281,7 +275,7 @@ export const TeamIdentityView: React.FC<Props> = ({ onNavigate, validationAttemp
               </span>
             </div>
 
-            <div className="flex items-center gap-1.5 bg-[#FAF8F5] p-1 rounded-xl border border-[#D8CFC8]">
+            <div className="tk-count-chairs flex items-center gap-1.5">
               <span className="text-[11px] font-semibold text-[#6D5A50] px-2">Jumlah:</span>
               {[3, 4, 5].map((cnt) => (
                 <button
@@ -299,7 +293,8 @@ export const TeamIdentityView: React.FC<Props> = ({ onNavigate, validationAttemp
                     }
                     setFormData({ ...formData, members: current });
                   }}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  aria-pressed={formData.members.length === cnt}
+                  className={`tk-chair px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                     formData.members.length === cnt
                       ? 'bg-[#FF913D] text-white shadow-xs'
                       : 'text-[#6D5A50] hover:text-[#3E2723] hover:bg-white'
@@ -315,10 +310,11 @@ export const TeamIdentityView: React.FC<Props> = ({ onNavigate, validationAttemp
             {formData.members.map((member, idx) => (
               <div
                 key={idx}
-                className="member-role-card grid grid-cols-1 gap-3 bg-gradient-to-r from-[#F4F9E9] via-white to-[#FFF9E7] border-2 border-white p-4 rounded-2xl shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                className="tk-crew-ticket member-role-card grid grid-cols-1 gap-3"
               >
                 <div className="min-w-0 space-y-1.5">
-                  <label htmlFor={`member-name-${idx}`} className="block text-xs font-bold text-[#3E2723]">
+                  <div className="tk-crew-heading"><span className={`tk-member-avatar tk-avatar-${idx % 5}`}>{member.name.trim().charAt(0).toUpperCase() || idx + 1}</span><strong>Kartu Kru {idx + 1}</strong></div>
+                  <label htmlFor={`member-name-${idx}`} className="tk-label-sticker block text-xs font-bold text-[#3E2723]">
                     Anggota {idx + 1} <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -342,22 +338,19 @@ export const TeamIdentityView: React.FC<Props> = ({ onNavigate, validationAttemp
                   )}
                 </div>
                 <div className="min-w-0 space-y-1.5">
-                  <label htmlFor={`member-role-${idx}`} className="block text-xs font-bold text-[#3E2723]">
+                  <span className="tk-label-sticker block text-xs font-bold text-[#3E2723]">
                     Peran Anggota {idx + 1}
-                  </label>
-                  <select
-                    id={`member-role-${idx}`}
-                    autoComplete="off"
-                    value={member.role}
-                    onChange={(e) => handleMemberRoleChange(idx, e.target.value)}
-                    className="box-border h-14 w-full min-w-0 px-4 bg-white border border-[#D8CFC8] rounded-lg text-sm lg:text-base font-medium text-[#3E2723] focus:outline-none focus:ring-2 focus:ring-[#FF913D]"
-                  >
-                    {PREDEFINED_ROLES.map((role) => (
-                      <option key={role} value={role}>
-                        {role}
-                      </option>
-                    ))}
-                  </select>
+                  </span>
+                  <div id={`member-role-${idx}`} className="tk-role-chips" role="radiogroup" aria-label={`Pilih peran anggota ${idx + 1}`}>
+                    {PREDEFINED_ROLES.map((role, roleIndex) => {
+                      const RoleIcon = roleIcons[roleIndex];
+                      return <button key={role} type="button" role="radio" aria-checked={member.role === role} tabIndex={member.role === role ? 0 : -1} className="tk-role-chip" onClick={() => handleMemberRoleChange(idx, role)} onKeyDown={(event) => {
+                        const choices = Array.from(event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="radio"]') || []);
+                        const offset = event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 0;
+                        if (offset) { event.preventDefault(); const nextIndex = (roleIndex + offset + choices.length) % choices.length; handleMemberRoleChange(idx, PREDEFINED_ROLES[nextIndex]); choices[nextIndex]?.focus(); }
+                      }}><RoleIcon size={16} aria-hidden="true" />{role}</button>;
+                    })}
+                  </div>
                 </div>
               </div>
             ))}
@@ -370,7 +363,7 @@ export const TeamIdentityView: React.FC<Props> = ({ onNavigate, validationAttemp
         </div>
 
         {/* Team Agreement */}
-        <div className="space-y-1.5 pt-2">
+        <div className="tk-agreement-section space-y-1.5 pt-2">
           <label className="text-xs font-bold text-[#3E2723] block">
             Kesepakatan Kerja Kelompok
           </label>
@@ -384,7 +377,7 @@ export const TeamIdentityView: React.FC<Props> = ({ onNavigate, validationAttemp
               setErrorMessage('');
             }}
             placeholder="Tuliskan komitmen kelompokmu..."
-            className="box-border h-40 min-h-[140px] max-h-[180px] w-full min-w-0 resize-y px-4 py-3 bg-[#FAF8F5] border border-[#D8CFC8] rounded-xl text-sm lg:text-base font-medium text-[#2D231E] focus:outline-none focus:ring-2 focus:ring-[#FF913D]"
+            className="tk-lined-paper box-border h-40 min-h-[140px] max-h-[180px] w-full min-w-0 resize-y px-4 py-3 bg-[#FAF8F5] border border-[#D8CFC8] rounded-xl text-base font-medium text-[#2D231E] focus:outline-none focus:ring-2 focus:ring-[#FF913D]"
           />
         </div>
       </div>

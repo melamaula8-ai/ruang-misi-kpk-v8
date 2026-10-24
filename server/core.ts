@@ -463,7 +463,22 @@ async function handlePost(request: Request, env: Env, teacherIdentity: string | 
       for (const row of upsertSubmissions as any[]) {
         const rev = await isRevoked(db, row.id);
         if (rev) continue; // guru tidak boleh tanpa sengaja menghidupkan lagi sesi yang sudah dihapus
-        batch.push(db.prepare(SQL.upsertSubmissionTeacher).bind(row.id, upper(row.groupCode) || null, JSON.stringify(row), now, teacherIdentity));
+        const storedRow = await db.prepare('SELECT data FROM submissions WHERE id = ? AND owner_id = ?').bind(row.id, teacherIdentity).first<any>();
+        const stored = storedRow ? parse(storedRow.data) : null;
+        const data = { ...row };
+        if (stored) {
+          const resetAnswers = row.resetAnswers === true && ['reopened', 'in_progress'].includes(String(row.status));
+          const studentFields = [
+            'answers', 'team', 'presentation', 'reflection', 'track', 'groupId', 'groupCode', 'classId',
+            'startedAt', 'timerStartedAtTimestamp', 'targetEndTimestamp', 'isTimerRunning', 'submittedAt',
+          ];
+          for (const key of studentFields) {
+            if (key === 'answers' && resetAnswers) continue;
+            if (Object.prototype.hasOwnProperty.call(stored, key)) data[key] = stored[key];
+          }
+          delete data.resetAnswers;
+        }
+        batch.push(db.prepare(SQL.upsertSubmissionTeacher).bind(row.id, upper(data.groupCode) || null, JSON.stringify(data), now, teacherIdentity));
       }
       for (const id of deleteSubmissions) {
         batch.push(db.prepare(`INSERT OR IGNORE INTO revoked_sessions (submission_id, group_code, revoked_at)
@@ -547,7 +562,8 @@ async function handlePost(request: Request, env: Env, teacherIdentity: string | 
       const existing = existingRow ? parse(existingRow.data) : null;
       if (existingRow && upper(existingRow.group_code) !== code) throw new SyncError('FORBIDDEN', 'Sesi tidak cocok dengan ID kelompok.', 403);
       if (!STUDENT_STATUSES.has(String(incoming.status))) throw new SyncError('FORBIDDEN', 'Status ini hanya dapat ditetapkan oleh guru.', 403);
-      if (existing && ['reviewed', 'results_published'].includes(existing.status)) {
+      if (existing && (existing.status === 'results_published' ||
+          (existing.status === 'reviewed' && !Object.keys(existing.answers || {}).length))) {
         throw new SyncError('FORBIDDEN', 'Penilaian sudah selesai; minta izin guru untuk mengulang.', 403);
       }
       // Bidang milik guru tidak pernah berasal dari siswa.
