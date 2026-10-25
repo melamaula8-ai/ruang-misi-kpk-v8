@@ -2,17 +2,21 @@ import React from 'react';
 
 interface RocketElephantProps {
   launching: boolean;
+  onLaunchStart: () => void;
   onLaunchComplete: () => void;
 }
 
 /** Mascot flying inside a colorful learning rocket. */
-export const RocketElephant: React.FC<RocketElephantProps> = ({ launching, onLaunchComplete }) => (
+export const RocketElephant: React.FC<RocketElephantProps> = ({ launching, onLaunchStart, onLaunchComplete }) => (
   <svg
     className={`countdown-rocket ${launching ? 'is-launching' : ''}`}
     viewBox="0 0 400 500"
     role="img"
     aria-label="Tiko bersiap meluncur di dalam roket"
     xmlns="http://www.w3.org/2000/svg"
+    onAnimationStart={(event) => {
+      if (event.target === event.currentTarget && event.animationName === 'countdown-rocket-launch') onLaunchStart();
+    }}
     onAnimationEnd={(event) => {
       if (launching && event.target === event.currentTarget) onLaunchComplete();
     }}

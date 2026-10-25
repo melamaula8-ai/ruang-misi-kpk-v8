@@ -5,7 +5,13 @@ import {
   findSubmissionForGroupToken,
 } from '../src/context/AssessmentContext';
 import type { AssessmentSubmission, GroupToken } from '../src/types';
-import { mergeGroupSubmissionsPreservingActive } from '../src/utils/submissionSync';
+import {
+  enqueueSerializedWrite,
+  mergeGroupSubmissionsPreservingActive,
+  overlayPendingMissionAnswerEdits,
+  overlayPendingMissionCompletions,
+  shouldApplyRemoteSnapshot,
+} from '../src/utils/submissionSync';
 import { findCompleteGroupIdentity } from '../src/utils/groupIdentity';
 
 const groupA: GroupToken = {
@@ -25,6 +31,90 @@ const submission = (token: GroupToken, id: string, teamName: string, members: st
     agreement: 'Sepakat bekerja sama.',
     members: members.map((name, index) => ({ name, role: `Peran ${index + 1}` })),
   },
+});
+
+test('polling tidak menimpa jawaban saat ada edit lokal atau penyimpanan yang lebih baru', () => {
+  const request = {
+    isLatestRequest: true,
+    sessionRevoked: false,
+    hasPendingLocalChanges: false,
+    answerRevisionAtRequest: 4,
+    currentAnswerRevision: 4,
+    writeRevisionAtRequest: 2,
+    currentWriteRevision: 2,
+  };
+
+  assert.equal(shouldApplyRemoteSnapshot(request), true);
+  assert.equal(shouldApplyRemoteSnapshot({ ...request, hasPendingLocalChanges: true }), false);
+  assert.equal(shouldApplyRemoteSnapshot({ ...request, currentAnswerRevision: 5 }), false);
+  assert.equal(shouldApplyRemoteSnapshot({ ...request, currentWriteRevision: 3 }), false);
+  assert.equal(shouldApplyRemoteSnapshot({ ...request, isLatestRequest: false }), false);
+  assert.equal(shouldApplyRemoteSnapshot({ ...request, sessionRevoked: true, hasPendingLocalChanges: true }), true);
+});
+
+test('edit jawaban lokal menimpa snapshot lama per ID soal, tahap, dan kolom tanpa menghapus jawaban lain', () => {
+  const remote = submission(groupA, 'submission-a', 'Tim A', []);
+  remote.answers = {
+    m1_penjelajah: {
+      step1: { rina_interval: '2', siti_interval: '3' },
+      step2: { strategy_plan: 'rencana tersimpan' },
+      step3: { multiples_num1: '2, 4, 6' },
+      step4: {},
+    },
+    m2_penjelajah: { step1: {}, step2: {}, step3: {}, step4: {} },
+  };
+  const edits = {
+    'submission-a': {
+      m1_penjelajah: { step3: { multiples_num1: '2, 4, 6, 8' } },
+      m2_penjelajah: { step3: { lcm_value: '8' } },
+    },
+  };
+
+  const [merged] = overlayPendingMissionAnswerEdits([remote], edits);
+  assert.equal(merged.answers.m1_penjelajah.step1.rina_interval, '2');
+  assert.equal(merged.answers.m1_penjelajah.step2.strategy_plan, 'rencana tersimpan');
+  assert.equal(merged.answers.m1_penjelajah.step3.multiples_num1, '2, 4, 6, 8');
+  assert.equal(merged.answers.m2_penjelajah.step3.lcm_value, '8');
+  assert.equal(remote.answers.m1_penjelajah.step3.multiples_num1, '2, 4, 6', 'merge does not mutate remote snapshots');
+});
+
+test('penyelesaian misi lokal tidak hilang ketika snapshot lama dipolling', () => {
+  const remote = submission(groupA, 'submission-a', 'Tim A', []);
+  remote.completedMissionIds = ['m1_penjelajah', 'm2_penjelajah', 'm3_penjelajah'];
+  const [merged] = overlayPendingMissionCompletions([remote], {
+    'submission-a': ['m4_penjelajah'],
+  });
+
+  assert.deepEqual(merged.completedMissionIds, [
+    'm1_penjelajah', 'm2_penjelajah', 'm3_penjelajah', 'm4_penjelajah',
+  ]);
+  assert.deepEqual(remote.completedMissionIds, [
+    'm1_penjelajah', 'm2_penjelajah', 'm3_penjelajah',
+  ], 'merge does not mutate remote snapshots');
+});
+
+test('autosave menulis snapshot secara berurutan agar request lama tidak selesai terakhir', async () => {
+  const events: string[] = [];
+  let releaseFirst: (() => void) | undefined;
+  const firstWrite = () => new Promise<void>((resolve) => {
+    events.push('first-start');
+    releaseFirst = () => {
+      events.push('first-end');
+      resolve();
+    };
+  });
+  const secondWrite = async () => {
+    events.push('second-start');
+  };
+
+  let queue = Promise.resolve();
+  queue = enqueueSerializedWrite(queue, firstWrite);
+  queue = enqueueSerializedWrite(queue, secondWrite);
+  await Promise.resolve();
+  assert.deepEqual(events, ['first-start']);
+  releaseFirst?.();
+  await queue;
+  assert.deepEqual(events, ['first-start', 'first-end', 'second-start']);
 });
 
 test('klaim Kelas B menghasilkan identitas kosong dan tidak mewarisi identitas Kelas A', () => {

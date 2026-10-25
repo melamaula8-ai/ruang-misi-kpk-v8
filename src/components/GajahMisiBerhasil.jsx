@@ -3,14 +3,14 @@ import { useEffect, useState } from "react";
 /**
  * GajahMisiBerhasil
  * Animasi gajah kartun 2D (SVG + CSS keyframes) untuk Ruang Misi KPK.
- * - Dimainkan SEKALI (±3 detik) saat komponen di-mount.
+ * - Dimainkan SEKALI (4,3 detik) saat komponen di-mount.
  * - Background transparan, tanpa library, tanpa API.
  * - CSS di-scope dengan prefix "rm-" agar tidak mengubah desain lain.
  * - Untuk memutar ulang, ubah prop `key` dari luar: <GajahMisiBerhasil key={n} />
  * - Menghormati prefers-reduced-motion (langsung tampil pose akhir + teks).
  */
 
-const TOTAL_MS = 3100;
+const TOTAL_MS = 4300;
 
 const CONFETTI_COLORS = ["#FF6B6B", "#FFD93D", "#6BCB77", "#4D96FF", "#FF9CEE", "#FF9F45"];
 
@@ -52,8 +52,8 @@ const CSS = `
 .rm-gajah svg{width:min(100%,var(--rm-size,320px));height:auto;overflow:visible;display:block}
 .rm-gajah svg *{transform-box:view-box}
 
-/* satu timeline 3 detik untuk semua bagian tubuh */
-.rm-a{animation-duration:3s;animation-iteration-count:1;animation-fill-mode:both;animation-timing-function:ease-in-out}
+/* Satu timeline 4,3 detik agar gerak tubuh dan audio perayaan selesai bersama. */
+.rm-a{animation-duration:4.3s;animation-iteration-count:1;animation-fill-mode:both;animation-timing-function:ease-in-out}
 
 .rm-shadow{transform-origin:150px 266px;animation-name:rm-shadow}
 .rm-main{transform-origin:150px 262px;animation-name:rm-main}
@@ -259,14 +259,14 @@ export default function GajahMisiBerhasil({ size = 320, onComplete }) {
       typeof window !== "undefined" &&
       window.matchMedia &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const t = setTimeout(
-      () => {
-        setDone(true);
-        if (onComplete) onComplete();
-      },
-      reduce ? 0 : TOTAL_MS
-    );
-    return () => clearTimeout(t);
+    const revealTimer = setTimeout(() => setDone(true), reduce ? 0 : 3500);
+    const completeTimer = setTimeout(() => {
+      if (onComplete) onComplete();
+    }, reduce ? 0 : TOTAL_MS);
+    return () => {
+      clearTimeout(revealTimer);
+      clearTimeout(completeTimer);
+    };
     // sengaja hanya sekali saat mount: animasi dimainkan satu kali
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

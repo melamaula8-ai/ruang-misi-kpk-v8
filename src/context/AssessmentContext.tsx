@@ -19,7 +19,15 @@ import {
 } from '../data/questionBank';
 import { calculateLCM, addDaysToDate } from '../utils/math';
 import { isTeamIdentityComplete } from '../utils/teamIdentity';
-import { mergeGroupSubmissionsPreservingActive } from '../utils/submissionSync';
+import {
+  enqueueSerializedWrite,
+  mergeGroupSubmissionsPreservingActive,
+  overlayPendingMissionAnswerEdits,
+  overlayPendingMissionCompletions,
+  shouldApplyRemoteSnapshot,
+  type PendingMissionAnswerEdits,
+  type PendingMissionCompletions,
+} from '../utils/submissionSync';
 import { addCompletedMissionId } from '../utils/missionProgress';
 
 interface AssessmentContextType {
@@ -448,6 +456,12 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const lastRemoteSnapshot = useRef('');
   const hasPendingLocalChanges = useRef(false);
   const pendingPushVersion = useRef(0);
+  const localAnswerRevision = useRef(0);
+  const cloudWriteRevision = useRef(0);
+  const latestPollRevision = useRef(0);
+  const pendingMissionAnswerEdits = useRef<PendingMissionAnswerEdits>({});
+  const pendingMissionCompletions = useRef<PendingMissionCompletions>({});
+  const cloudWriteQueue = useRef<Promise<void>>(Promise.resolve());
   const applyingRemote = useRef(false);
   const cloudHeaders = (jsonBody = false): HeadersInit => {
     const headers: Record<string, string> = { Accept: 'application/json' };
@@ -535,6 +549,7 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   };
 
   const applyCloudData = (data: any) => {
+    latestPollRevision.current += 1;
     applyingRemote.current = true;
     const publishedBank = data.settings?.learningContent?.published?.questions ?? data.settings?.learningContent?.questions;
     const remoteBank = Array.isArray(publishedBank) ? publishedBank : data.settings?.questions;
@@ -542,7 +557,13 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       ? migrateInnovatorProblemAnalysis(remoteBank)
       : questions;
     const incomingSubmissions = Array.isArray(data.submissions)
-      ? migrateInnovatorProblemAnswers(data.submissions)
+      ? overlayPendingMissionCompletions(
+          overlayPendingMissionAnswerEdits(
+            migrateInnovatorProblemAnswers(data.submissions),
+            pendingMissionAnswerEdits.current,
+          ),
+          pendingMissionCompletions.current,
+        )
       : null;
     const incomingLearning = data.settings?.learningContent as LearningContentState | undefined;
     const updatedIncomingLearning = incomingLearning?.draft && incomingLearning?.published
@@ -706,44 +727,53 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
     hasPendingLocalChanges.current = true;
     const pushVersion = ++pendingPushVersion.current;
-    const timeout = window.setTimeout(async () => {
-      try {
-        const previous = lastPushedSnapshot.current ? JSON.parse(lastPushedSnapshot.current) : { tokens: [], submissions: [], settings: {} };
-        const byId = (rows: any[]) => new Map((rows || []).map((row: any) => [row.id, row]));
-        const previousTokens = byId(previous.tokens || []), currentTokens = byId(current.tokens || []);
-        const previousSubs = byId(previous.submissions || []), currentSubs = byId(current.submissions || []);
-        const changed = (a: any, b: any) => JSON.stringify(a) !== JSON.stringify(b);
-        const settings: Record<string, unknown> = {};
-        for (const key of ['questions', 'trackLock', 'rubric', 'customLogo', 'learningContent']) {
-          if (changed(previous.settings?.[key], current.settings?.[key])) settings[key] = current.settings?.[key] ?? null;
-        }
-        const payload = {
-          upsertTokens: [...currentTokens.values()].filter((row: any) => !previousTokens.has(row.id) || changed(previousTokens.get(row.id), row)),
-          deleteTokens: [...previousTokens.keys()].filter((id: string) => !currentTokens.has(id)),
-          upsertSubmissions: [...currentSubs.values()].filter((row: any) => !previousSubs.has(row.id) || changed(previousSubs.get(row.id), row)),
-          deleteSubmissions: [...previousSubs.keys()].filter((id: string) => !currentSubs.has(id)),
-          settings,
-        };
-        if (!payload.upsertTokens.length && !payload.deleteTokens.length && !payload.upsertSubmissions.length && !payload.deleteSubmissions.length && !Object.keys(settings).length) return;
-        const response = await fetch('/api/sync', { method: 'POST', headers: cloudHeaders(true), body: JSON.stringify(payload) });
-        if (!response.ok) {
-          const failure = await response.json().catch(() => ({} as { code?: string }));
-          if (!isTeacherLoggedIn && failure?.code === 'SESSION_DELETED') {
-            // Guru sudah menghapus sesi ini: jangan terus mencoba menyimpan data yang sudah dibuang.
-            resetDeletedStudentSession();
-            return;
+    const answerRevisionAtPush = localAnswerRevision.current;
+    const timeout = window.setTimeout(() => {
+      const writeSnapshot = async () => {
+        try {
+          const previous = lastPushedSnapshot.current ? JSON.parse(lastPushedSnapshot.current) : { tokens: [], submissions: [], settings: {} };
+          const byId = (rows: any[]) => new Map((rows || []).map((row: any) => [row.id, row]));
+          const previousTokens = byId(previous.tokens || []), currentTokens = byId(current.tokens || []);
+          const previousSubs = byId(previous.submissions || []), currentSubs = byId(current.submissions || []);
+          const changed = (a: any, b: any) => JSON.stringify(a) !== JSON.stringify(b);
+          const settings: Record<string, unknown> = {};
+          for (const key of ['questions', 'trackLock', 'rubric', 'customLogo', 'learningContent']) {
+            if (changed(previous.settings?.[key], current.settings?.[key])) settings[key] = current.settings?.[key] ?? null;
           }
-          throw new Error(`Database save returned ${response.status}`);
+          const payload = {
+            upsertTokens: [...currentTokens.values()].filter((row: any) => !previousTokens.has(row.id) || changed(previousTokens.get(row.id), row)),
+            deleteTokens: [...previousTokens.keys()].filter((id: string) => !currentTokens.has(id)),
+            upsertSubmissions: [...currentSubs.values()].filter((row: any) => !previousSubs.has(row.id) || changed(previousSubs.get(row.id), row)),
+            deleteSubmissions: [...previousSubs.keys()].filter((id: string) => !currentSubs.has(id)),
+            settings,
+          };
+          if (!payload.upsertTokens.length && !payload.deleteTokens.length && !payload.upsertSubmissions.length && !payload.deleteSubmissions.length && !Object.keys(settings).length) return;
+          const response = await fetch('/api/sync', { method: 'POST', headers: cloudHeaders(true), body: JSON.stringify(payload) });
+          if (!response.ok) {
+            const failure = await response.json().catch(() => ({} as { code?: string }));
+            if (!isTeacherLoggedIn && failure?.code === 'SESSION_DELETED') {
+              // Guru sudah menghapus sesi ini: jangan terus mencoba menyimpan data yang sudah dibuang.
+              resetDeletedStudentSession();
+              return;
+            }
+            throw new Error(`Database save returned ${response.status}`);
+          }
+          if (pushVersion === pendingPushVersion.current) {
+            lastPushedSnapshot.current = currentString;
+            hasPendingLocalChanges.current = false;
+            if (answerRevisionAtPush === localAnswerRevision.current) {
+              pendingMissionAnswerEdits.current = {};
+              pendingMissionCompletions.current = {};
+            }
+          }
+          cloudWriteRevision.current += 1;
+          setCloudStatus('online');
+        } catch (error) {
+          console.error('[Ruang Misi KPK] Could not sync changes:', error);
+          setCloudStatus('offline');
         }
-        if (pushVersion === pendingPushVersion.current) {
-          lastPushedSnapshot.current = currentString;
-          hasPendingLocalChanges.current = false;
-        }
-        setCloudStatus('online');
-      } catch (error) {
-        console.error('[Ruang Misi KPK] Could not sync changes:', error);
-        setCloudStatus('offline');
-      }
+      };
+      cloudWriteQueue.current = enqueueSerializedWrite(cloudWriteQueue.current, writeSnapshot);
     }, 1000);
     return () => window.clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -755,17 +785,29 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   useEffect(() => {
     if (!cloudReady) return;
     const pollOnce = async () => {
+      const pollRevision = ++latestPollRevision.current;
+      const answerRevisionAtStart = localAnswerRevision.current;
+      const writeRevisionAtStart = cloudWriteRevision.current;
       try {
         const response = await fetch(cloudUrl(), { headers: cloudHeaders(), cache: 'no-store' });
         if (response.status === 401 && isTeacherLoggedIn) { logoutTeacher(); return; }
         if (!response.ok) throw new Error(`Database poll returned ${response.status}`);
         const data = await response.json();
+        if (pollRevision !== latestPollRevision.current) return;
         const remoteString = JSON.stringify(data);
         const activeSessionWasDeleted =
           !isTeacherLoggedIn && Boolean(activeTokenCode) && data.sessionRevoked === true;
         if (
           remoteString !== lastRemoteSnapshot.current &&
-          (activeSessionWasDeleted || !hasPendingLocalChanges.current)
+          shouldApplyRemoteSnapshot({
+            isLatestRequest: pollRevision === latestPollRevision.current,
+            sessionRevoked: activeSessionWasDeleted,
+            hasPendingLocalChanges: hasPendingLocalChanges.current,
+            answerRevisionAtRequest: answerRevisionAtStart,
+            currentAnswerRevision: localAnswerRevision.current,
+            writeRevisionAtRequest: writeRevisionAtStart,
+            currentWriteRevision: cloudWriteRevision.current,
+          })
         ) {
           applyCloudData(data);
         }
@@ -1421,7 +1463,24 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       return;
     }
 
+    localAnswerRevision.current += 1;
+    hasPendingLocalChanges.current = true;
     const targetId = effectiveActiveId;
+    const submissionEdits = pendingMissionAnswerEdits.current[targetId] || {};
+    const questionEdits = submissionEdits[questionId] || {};
+    pendingMissionAnswerEdits.current = {
+      ...pendingMissionAnswerEdits.current,
+      [targetId]: {
+        ...submissionEdits,
+        [questionId]: {
+          ...questionEdits,
+          [step]: {
+            ...questionEdits[step],
+            [fieldId]: value,
+          },
+        },
+      },
+    };
     setAllSubmissions((prev) =>
       prev.map((sub) => {
         if (sub.id !== targetId) return sub;
@@ -1455,6 +1514,12 @@ export const AssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const completeMission = (questionId: string) => {
     const targetId = effectiveActiveId;
+    localAnswerRevision.current += 1;
+    hasPendingLocalChanges.current = true;
+    pendingMissionCompletions.current = {
+      ...pendingMissionCompletions.current,
+      [targetId]: [...new Set([...(pendingMissionCompletions.current[targetId] || []), questionId])],
+    };
     setAllSubmissions((previous) => previous.map((submission) =>
       submission.id === targetId
         ? { ...submission, completedMissionIds: addCompletedMissionId(submission.completedMissionIds, questionId) }

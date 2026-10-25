@@ -7,6 +7,25 @@
 let audioCtx: AudioContext | null = null;
 let isMuted = false;
 let lastButtonClickAt = 0;
+let missionCelebrationAudio: HTMLAudioElement | null = null;
+let missionCelebrationFadeTimer: number | null = null;
+let missionCelebrationFadeInterval: number | null = null;
+let rocketLaunchAudio: HTMLAudioElement | null = null;
+let rocketFadeTimer: number | null = null;
+let rocketFadeInterval: number | null = null;
+const MISSION_CELEBRATION_VOLUME = 0.38;
+const MISSION_CELEBRATION_FADE_DELAY_MS = 3800;
+const MISSION_CELEBRATION_FADE_DURATION_MS = 500;
+const ROCKET_AUDIO_VOLUME = 0.28;
+const ROCKET_ANIMATION_FADE_DELAY_MS = 1300;
+const ROCKET_AUDIO_FADE_DURATION_MS = 550;
+
+function getRocketLaunchAudio(): HTMLAudioElement | null {
+  if (typeof window === 'undefined') return null;
+  rocketLaunchAudio ??= new Audio('/sounds/Sound_Roket.mp3');
+  rocketLaunchAudio.preload = 'auto';
+  return rocketLaunchAudio;
+}
 
 function getAudioContext(): AudioContext | null {
   if (typeof window === 'undefined') return null;
@@ -28,12 +47,16 @@ export const soundManager = {
   },
 
   toggleMute(): boolean {
-    isMuted = !isMuted;
+    this.setMuted(!isMuted);
     return isMuted;
   },
 
   setMuted(muted: boolean) {
     isMuted = muted;
+    if (muted) this.stopMissionCelebration();
+    if (muted && rocketLaunchAudio) {
+      this.stopRocketLaunch();
+    }
   },
 
   playCountdownTick(value: number) {
@@ -193,5 +216,121 @@ export const soundManager = {
         osc.stop(now + n.time + n.duration);
       });
     } catch {}
+  },
+
+  prepareMissionCelebration() {
+    if (typeof window === 'undefined') return;
+    try {
+      missionCelebrationAudio ??= new Audio('/sounds/Sound_perayaan.mp3');
+      missionCelebrationAudio.preload = 'auto';
+      missionCelebrationAudio.load();
+    } catch (error) {
+      console.warn('Audio perayaan misi tidak dapat disiapkan:', error);
+    }
+  },
+
+  playMissionCelebration() {
+    if (isMuted || typeof window === 'undefined') return;
+    try {
+      this.stopMissionCelebration();
+      missionCelebrationAudio ??= new Audio('/sounds/Sound_perayaan.mp3');
+      missionCelebrationAudio.volume = MISSION_CELEBRATION_VOLUME;
+      missionCelebrationAudio.currentTime = 0;
+      const playback = missionCelebrationAudio.play();
+      playback.then(() => {
+        missionCelebrationFadeTimer = window.setTimeout(() => {
+          missionCelebrationFadeTimer = null;
+          this.fadeOutMissionCelebration();
+        }, MISSION_CELEBRATION_FADE_DELAY_MS);
+      }).catch((error: unknown) => {
+        console.warn('Audio perayaan misi tidak dapat diputar:', error);
+      });
+    } catch (error) {
+      console.warn('Audio perayaan misi tidak dapat diputar:', error);
+    }
+  },
+
+  fadeOutMissionCelebration() {
+    const audio = missionCelebrationAudio;
+    if (!audio) return;
+    if (missionCelebrationFadeInterval !== null) window.clearInterval(missionCelebrationFadeInterval);
+
+    const startingVolume = audio.volume;
+    const fadeStartedAt = performance.now();
+    missionCelebrationFadeInterval = window.setInterval(() => {
+      const progress = Math.min((performance.now() - fadeStartedAt) / MISSION_CELEBRATION_FADE_DURATION_MS, 1);
+      audio.volume = startingVolume * (1 - progress) ** 2;
+      if (progress >= 1) this.stopMissionCelebration();
+    }, 25);
+  },
+
+  stopMissionCelebration() {
+    if (missionCelebrationFadeTimer !== null) {
+      window.clearTimeout(missionCelebrationFadeTimer);
+      missionCelebrationFadeTimer = null;
+    }
+    if (missionCelebrationFadeInterval !== null) {
+      window.clearInterval(missionCelebrationFadeInterval);
+      missionCelebrationFadeInterval = null;
+    }
+    if (missionCelebrationAudio) {
+      missionCelebrationAudio.pause();
+      missionCelebrationAudio.currentTime = 0;
+      missionCelebrationAudio.volume = MISSION_CELEBRATION_VOLUME;
+    }
+  },
+
+  prepareRocketLaunch() {
+    getRocketLaunchAudio()?.load();
+  },
+
+  playRocketLaunch() {
+    if (isMuted) return;
+    try {
+      const audio = getRocketLaunchAudio();
+      if (!audio) return;
+      this.stopRocketLaunch();
+      audio.volume = ROCKET_AUDIO_VOLUME;
+      audio.currentTime = 0;
+      const playback = audio.play();
+      playback.catch((error: unknown) => {
+        console.warn('Audio roket tidak dapat diputar:', error);
+      });
+      rocketFadeTimer = window.setTimeout(() => {
+        rocketFadeTimer = null;
+        this.fadeOutRocketLaunch();
+      }, ROCKET_ANIMATION_FADE_DELAY_MS);
+    } catch (error) {
+      console.warn('Audio roket tidak dapat diputar:', error);
+    }
+  },
+
+  fadeOutRocketLaunch() {
+    const audio = rocketLaunchAudio;
+    if (!audio) return;
+    if (rocketFadeInterval !== null) window.clearInterval(rocketFadeInterval);
+
+    const startingVolume = audio.volume;
+    const fadeStartedAt = performance.now();
+    rocketFadeInterval = window.setInterval(() => {
+      const progress = Math.min((performance.now() - fadeStartedAt) / ROCKET_AUDIO_FADE_DURATION_MS, 1);
+      audio.volume = startingVolume * (1 - progress) ** 2;
+      if (progress >= 1) this.stopRocketLaunch();
+    }, 25);
+  },
+
+  stopRocketLaunch() {
+    if (!rocketLaunchAudio) return;
+    if (rocketFadeTimer !== null) {
+      window.clearTimeout(rocketFadeTimer);
+      rocketFadeTimer = null;
+    }
+    if (rocketFadeInterval !== null) {
+      window.clearInterval(rocketFadeInterval);
+      rocketFadeInterval = null;
+    }
+    rocketLaunchAudio.pause();
+    rocketLaunchAudio.currentTime = 0;
+    rocketLaunchAudio.volume = ROCKET_AUDIO_VOLUME;
   },
 };

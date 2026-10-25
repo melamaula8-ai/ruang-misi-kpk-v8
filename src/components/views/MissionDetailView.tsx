@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, CheckCircle2, Lock } from 'lucide-react';
 import { useAssessment } from '../../context/AssessmentContext';
 import { soundManager } from '../../utils/sound';
-import { MissionSubmissionAnswers, MissionContext } from '../../types';
+import { MissionContext } from '../../types';
 import { queueMissionCelebrationAfterMission } from '../../utils/missionCelebration';
 import { isMissionMarkedComplete } from '../../utils/missionProgress';
 import { MissionSceneHeader } from '../mission/MissionSceneHeader';
@@ -47,7 +47,7 @@ export const MissionDetailView: React.FC<Props> = ({ missionNumber, onNavigate, 
   } = useAssessment();
 
   const [activeStep, setActiveStep] = useState<MissionStep>('step1');
-  const [localAnswers, setLocalAnswers] = useState<MissionSubmissionAnswers>({ step1: {}, step2: {}, step3: {}, step4: {} });
+  const workCardRef = useRef<HTMLElement>(null);
 
   const question = questions.find((item) => item.missionNumber === missionNumber && item.track === currentTrack);
   const currentQuestions = questions.filter((item) => item.track === currentTrack).slice().sort((a, b) => a.missionNumber - b.missionNumber);
@@ -56,12 +56,11 @@ export const MissionDetailView: React.FC<Props> = ({ missionNumber, onNavigate, 
 
   useEffect(() => {
     setActiveStep('step1');
-    if (question) setLocalAnswers(activeSubmission.answers[question.id] || { step1: {}, step2: {}, step3: {}, step4: {} });
   }, [missionNumber, question?.id]);
 
-  useEffect(() => {
-    if (question && activeSubmission.answers[question.id]) setLocalAnswers(activeSubmission.answers[question.id]);
-  }, [activeSubmission.answers, question?.id]);
+  useLayoutEffect(() => {
+    if (question) workCardRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }, [activeStep, question?.id]);
 
   // Keep hooks unconditional; only start a timer for a valid mission question.
   useEffect(() => {
@@ -85,7 +84,6 @@ export const MissionDetailView: React.FC<Props> = ({ missionNumber, onNavigate, 
       !activeSubmission.allowedRevisionSections.includes(`misi-${missionNumber}`)));
 
   const handleInputChange = (step: MissionStep, fieldId: string, value: string) => {
-    setLocalAnswers((previous) => ({ ...previous, [step]: { ...(previous[step] || {}), [fieldId]: value } }));
     updateMissionAnswer(question.id, step, fieldId, value);
   };
 
@@ -113,7 +111,8 @@ export const MissionDetailView: React.FC<Props> = ({ missionNumber, onNavigate, 
     completeMission(question.id);
     // Pressing "Selesai Misi" is the explicit completion action. Answer completeness
     // is still checked before final submission, but it must not trap the map on Misi 1.
-    queueMissionCelebrationAfterMission(activeSubmission.id, question.id, missionNumber, true);
+    const shouldCelebrate = queueMissionCelebrationAfterMission(activeSubmission.id, question.id, missionNumber, true);
+    if (shouldCelebrate) soundManager.prepareMissionCelebration();
     onNavigate('misi');
   };
 
@@ -156,12 +155,12 @@ export const MissionDetailView: React.FC<Props> = ({ missionNumber, onNavigate, 
         <MissionStoryCard question={question} track={currentTrack} missionNumber={missionNumber}/>
         <TikoHintBubble question={question} activeStep={activeStep} missionNumber={missionNumber} teacherHint={learningContent.published.instructions} onRequestHint={() => soundManager.playClick()}/>
       </div>
-      <PolyaStepper activeStep={activeStep} answers={localAnswers} onStepChange={(next) => { soundManager.playClick(); setActiveStep(next); }}/>
+      <PolyaStepper activeStep={activeStep} answers={currentAnswers} onStepChange={(next) => { soundManager.playClick(); setActiveStep(next); }}/>
 
-      <section className="mq-work-card" aria-labelledby="mq-step-title">
-        <header className="mq-work-heading"><div><span>TAHAP {Number(activeStep.slice(-1))} DARI 4</span><h2 id="mq-step-title">{stepTitle}</h2><p>{stepPrompt}</p></div><span className="mq-work-progress">{Object.values(localAnswers[activeStep] || {}).filter((value) => value.trim()).length} jawaban diisi</span></header>
+      <section ref={workCardRef} className="mq-work-card" aria-labelledby="mq-step-title">
+        <header className="mq-work-heading"><div><span>TAHAP {Number(activeStep.slice(-1))} DARI 4</span><h2 id="mq-step-title">{stepTitle}</h2><p>{stepPrompt}</p></div><span className="mq-work-progress">{Object.values(currentAnswers[activeStep] || {}).filter((value) => value.trim()).length} jawaban diisi</span></header>
         <MissionToolsDrawer question={question} activeStep={activeStep}/>
-        <div className="mq-fields">{fields.map((field) => <AnswerField key={field.id} field={field} value={localAnswers[activeStep]?.[field.id] ?? currentAnswers[activeStep]?.[field.id] ?? ''} step={activeStep} inputId={`field_${question.id}_${activeStep}_${field.id}`} disabled={isSubmissionLocked} track={currentTrack} onChange={handleInputChange}/>)}</div>
+        <div className="mq-fields">{fields.map((field) => <AnswerField key={field.id} field={field} value={currentAnswers[activeStep]?.[field.id] ?? ''} step={activeStep} inputId={`field_${question.id}_${activeStep}_${field.id}`} disabled={isSubmissionLocked} track={currentTrack} onChange={handleInputChange}/>)}</div>
         <div className="mq-action-bar">
           <span className="mq-saved-status"><CheckCircle2 size={18} aria-hidden="true"/> Tersimpan otomatis</span>
           <div className="mq-action-buttons">

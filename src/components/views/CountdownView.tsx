@@ -18,6 +18,7 @@ export const CountdownView: React.FC<Props> = ({ missionNumber, onNavigate }) =>
 
   useEffect(() => {
     let currentCount = 1;
+    soundManager.prepareRocketLaunch();
     soundManager.playCountdownTick(currentCount);
 
     const interval = window.setInterval(() => {
@@ -30,11 +31,11 @@ export const CountdownView: React.FC<Props> = ({ missionNumber, onNavigate }) =>
 
       window.clearInterval(interval);
       setRocketLaunched(true);
-      soundManager.playStartSignal();
     }, 1000);
 
     return () => {
       window.clearInterval(interval);
+      soundManager.stopRocketLaunch();
     };
     // Countdown runs once for each selected case.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -43,6 +44,7 @@ export const CountdownView: React.FC<Props> = ({ missionNumber, onNavigate }) =>
   const handleRocketLaunchComplete = () => {
     if (hasNavigatedRef.current) return;
     hasNavigatedRef.current = true;
+    soundManager.stopRocketLaunch();
     onNavigate('misi-detail');
   };
 
@@ -59,7 +61,14 @@ export const CountdownView: React.FC<Props> = ({ missionNumber, onNavigate }) =>
           <div className="countdown-scene-stars" aria-hidden="true"><i>✦</i><i>✧</i><i>✦</i><i>✧</i><i>✦</i></div>
           {!rocketLaunched && <div className="countdown-number" aria-live="assertive">{count}</div>}
           <div className="countdown-launch-pad" aria-hidden="true" />
-          <RocketElephant launching={rocketLaunched} onLaunchComplete={handleRocketLaunchComplete} />
+          <RocketElephant
+            launching={rocketLaunched}
+            onLaunchStart={() => {
+              soundManager.playRocketLaunch();
+              soundManager.playStartSignal();
+            }}
+            onLaunchComplete={handleRocketLaunchComplete}
+          />
           <div className="countdown-smoke countdown-smoke-left" aria-hidden="true" />
           <div className="countdown-smoke countdown-smoke-right" aria-hidden="true" />
         </div>

@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import GajahMisiBerhasil from '../GajahMisiBerhasil';
+import { soundManager } from '../../utils/sound';
 
 interface Props {
   missionId: string;
@@ -9,6 +10,11 @@ interface Props {
 }
 
 export const MissionCelebrationOverlay: React.FC<Props> = ({ missionId, isFinalMission, onComplete }) => {
+  useEffect(() => {
+    soundManager.playMissionCelebration();
+    return () => soundManager.stopMissionCelebration();
+  }, [missionId]);
+
   return createPortal(
     <div className="mission-celebration-overlay" role="status" aria-live="polite">
       <span className="mission-celebration-word" aria-hidden="true">{isFinalMission ? 'SEMUA MISI SELESAI!' : 'MISI SELESAI!'}</span>

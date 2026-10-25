@@ -103,6 +103,16 @@ export const MissionsHubView: React.FC<Props> = ({ onNavigate, onSelectMission }
   }, [showStars]);
 
   useEffect(() => {
+    if (
+      animationStage !== 'arrived' ||
+      !arrivalMarker ||
+      arrivalMarker.toDone < currentQuestions.length ||
+      !allCasesCompleted
+    ) return;
+    onNavigate(isSubmitted ? 'evaluasi' : 'refleksi');
+  }, [animationStage, arrivalMarker, currentQuestions.length, allCasesCompleted, isSubmitted, onNavigate]);
+
+  useEffect(() => {
     if (!hasTimeExpired) return;
     const timer = window.setTimeout(() => onNavigate('evaluasi'), 3500);
     return () => window.clearTimeout(timer);
